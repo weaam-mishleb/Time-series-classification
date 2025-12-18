@@ -44,6 +44,8 @@ import traceback
 import subprocess
 import re
 
+import logging
+
 
 ######################## GPU CHECKING AND SETUP ##############################
 
@@ -1671,9 +1673,11 @@ def get_data_parameters(X,y):
     num_class=len(np.unique(y))
     seq_len=X.shape[1]
     num_features=X.shape[2]
+    logging.info(f"Data parameters - num_class: {num_class}, seq_len: {seq_len}, num_features: {num_features}")
     classes_names=get_classes_names(num_class)
     return num_class, seq_len, num_features, classes_names
 
+# For Cesnet datasets separate X and y with selected features
 def prepare_features_cesnet_selected(data_path, selected_feature_indices=[1,4,6], num_features=8):
     """
     Load and reshape Cesnet features, selecting only a subset of feature indices.
@@ -1704,6 +1708,32 @@ def prepare_features_cesnet_selected(data_path, selected_feature_indices=[1,4,6]
     print("X shape: ", selected_features.shape)
     return selected_features, y_encoded, le
 
+# For direction datasets as in UTMobile & Cesnet, creating X only with selected features
+def prepare_features_UTMobiles_selected(data_path, selected_feature_indices=[1,4,6], num_features=8):
+    """
+    Load and reshape UTMobile features, selecting only a subset of feature indices.
+
+    Parameters:
+    - data_path: path to the CSV
+    - selected_feature_indices: list of indices to include (e.g., [1,4,6])
+    - num_features: number of features per timestep (default: 8)
+
+    Returns:
+    - X: numpy array (samples, timesteps, selected_features)
+    """
+    df = pd.read_csv(data_path)
+
+    total_timesteps = df.shape[1] // num_features
+    all_features = df.values.reshape((df.shape[0], total_timesteps, num_features))
+
+    # Select only the desired features
+    selected_features = all_features[:, :, selected_feature_indices]
+    
+    print("X shape: ", selected_features.shape)
+    logging.info(f"Prepared features with shape: {selected_features.shape}")
+    return selected_features
+
+# Create model based on configuration
 def create_model(X,
                  y,
                  config_type='nst',
@@ -1751,15 +1781,27 @@ def prepare_datasets(dataset_name = "UTMobileNet",
                      small_windows = ["10ms","20ms","30ms", "40ms","75ms","100ms","200ms"],
                      big_windows = ["5s"],
                      class_counts = ["15 classes"],
-                     dataset_type = "dir", #  in cesnet "dir" for direction, or "balanced" for balanced dataset
+                     dataset_type =None, #  in cesnet "dir" for direction, or "balanced" for balanced dataset
                     #  num_classes=None,
-                    selected_feature_indices=[0, 3, 5],
-                     pos=1):
+                    selected_feature_indices= None,
+                    pos= 1):
  
     # UTMobile
     datasets_dict = {}
+
+    """
+    we create for utmobile two types of fuetures
+    'dir' like in cesnet, where we take the direction feature
+    and packet amount feature like in visquic and quictext
+    """
     if dataset_name == "UTMobileNet":
-        base_path = "../../../data/Chanan/UTMobileNet/dataset"
+        if dataset_type == "dir":
+            logging.info("Preparing direction datasets for UTMobileNet")
+            print("Preparing direction datasets for UTMobileNet")
+            base_path = "../../../data/Chanan/UTMobileNet/direction_dataset"
+        else:
+            logging.info("Preparing datasets for UTMobileNet")
+            base_path = "../../../data/Chanan/UTMobileNet/dataset"
     # VisQuic
     elif dataset_name == "VisQuic":
         base_path = "../../../data/Chanan/VisQUIC/datasets/unbalanced"
@@ -1795,7 +1837,11 @@ def prepare_datasets(dataset_name = "UTMobileNet",
                         print(f"Feature path: {feature_path}")
                         # Check if files exist
                         if os.path.exists(feature_path) and os.path.exists(label_path):
-                            X = prepare_features(feature_path,pos=pos) #pos=1 is total size and pos=2 is packet amount
+                            if selected_feature_indices is not None:
+                                logging.info(f"Using selected features: {selected_feature_indices}")
+                                X = prepare_features_UTMobiles_selected(feature_path, selected_feature_indices=selected_feature_indices, num_features=8)
+                            else:
+                                X = prepare_features(feature_path,pos=pos) #pos=1 is total size and pos=2 is packet amount
                             y = prepare_labels_QuicText(label_path)
 
                             # Create a descriptive key for the dataset
@@ -2031,7 +2077,7 @@ def evaluate_models_on_datasets(datasets_dict,
     
     # Save results
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_dir = f'/home/chanan/Time-Series-Library/results/{dataset_name}'
+    results_dir = f'/home/chanan/Time-Series-Library/test/{dataset_name}/direction'
     os.makedirs(results_dir, exist_ok=True)
     
     # Create detailed filename
@@ -2066,80 +2112,6 @@ def save_cm_as_csv(cm, filename, config):
         print(f"Saved confusion matrix to {save_path}")
     except Exception as e:
         print(f"Error saving confusion matrix: {str(e)}")
-
-############################## App.py ##############################
-import streamlit as st
-
-def evaluate_models_on_datasets_with_progress(
-    datasets_dict,
-    model_types,
-    use_class_weights,
-    dataset_name,
-    feature_name,
-    progress_bar
-):
-    total_tasks = len(datasets_dict) * len(model_types)
-    task_counter = 0
-
-    results_all = []
-
-    for dataset_key, (X, y) in datasets_dict.items():
-        for model_type in model_types:
-            try:
-                num_class, seq_len, num_features, classes_names = get_data_parameters(X, y)
-
-                config = TimeSeriesConfig(
-                    model_type=model_type,
-                    num_class=num_class,
-                    seq_len=seq_len,
-                    num_features=num_features,
-                    classes_names=classes_names,
-                    dataset_name=dataset_name,
-                    small_window=dataset_key,
-                    feature_name=feature_name
-                )
-
-                model = create_model(X, y, config_type=model_type,
-                                     dataset_name=dataset_name,
-                                     small_window=dataset_key,
-                                     feature_name=feature_name)[0]
-
-                train_loader, val_loader, class_weights = prepare_data(X, y, config)
-
-                start_keyboard_listener()
-                user_control['stop'] = False
-                user_control['reduce_lr'] = False
-                user_control['done'] = False
-
-                model, val_acc, eval_time_ms, metrics = train_classifier(
-                    train_loader,
-                    val_loader,
-                    config,
-                    model=model,
-                    optimizer=None,
-                    start_epoch=0,
-                    best_train_acc=0,
-                    class_weights=class_weights if use_class_weights else None
-                )
-
-                result = {
-                    'model': model_type,
-                    'dataset_key': dataset_key,
-                    'val_acc': val_acc,
-                    'metrics': metrics,
-                    'eval_time_ms': eval_time_ms,
-                }
-                results_all.append(result)
-
-            except Exception as e:
-                st.error(f"Error training {model_type} on {dataset_key}: {str(e)}")
-            
-            # Update progress bar
-            task_counter += 1
-            progress = int(task_counter / total_tasks * 100)
-            progress_bar.progress(progress)
-
-    return results_all
 
 ############################# Hendler early stpping and reduce LR #############################
 user_control = {

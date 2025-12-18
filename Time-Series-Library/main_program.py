@@ -57,6 +57,34 @@ if __name__ == '__main__':
         best_gpu = ts.get_least_used_gpu()
         print(f"Best GPU: {best_gpu}")
 
+
+
+    # def merge_csv_files(root_folder, output_file):
+    #     all_dfs = []
+
+    #     # Walk through the root folder and all subfolders
+    #     for dirpath, _, filenames in os.walk(root_folder):
+    #         for file in filenames:
+    #             if file.endswith(".csv"):
+    #                 file_path = os.path.join(dirpath, file)
+    #                 try:
+    #                     df = pd.read_csv(file_path, usecols=["model", "dataset", "Inference Time (ms)"])
+    #                     all_dfs.append(df)
+    #                     print(f"Loaded: {file_path} ({len(df)} rows)")
+    #                 except Exception as e:
+    #                     print(f"Skipping {file_path} - {e}")
+
+    #     # Concatenate all dataframes
+    #     if all_dfs:
+    #         merged_df = pd.concat(all_dfs, ignore_index=True)
+    #         merged_df.to_csv(output_file, index=False)
+    #         print(f"\n✅ Merged CSV saved to: {output_file} ({len(merged_df)} rows)")
+    #     else:
+    #         print("⚠️ No valid CSV files found.")
+
+    # # Example usage:
+    # merge_csv_files("/results/QuicText", "QuicText_union_inference_time_results.csv")
+
     # %%
     # dataset_name="Cesnet"
     # small_windows = ["10ms"]
@@ -147,25 +175,27 @@ if __name__ == '__main__':
     #                                             )
     
     # %%
-    dataset_name="Cesnet"
+    dataset_name="UTMobileNet"
     dataset_type = "dir" #"balanced"
-    small_window5 = ["10ms"] #"5ms",
-    small_window4 = ["20ms"] #"30ms"
-    small_window3 = ["40ms"]#"50ms"
-    small_window2 = ["75ms"]#,"100ms"
-    small_window1 = ["150ms","200ms"]#,"250ms"
-    small_windows =[small_window5] # small_window1,small_window2,small_window3,small_window4,
+    # small_window5 = ["10ms"] #"5ms",
+    small_window4 = ["20ms","30ms"] #"30ms"
+    small_window3 = ["40ms","50ms"]#"50ms"
+    small_window2 = ["75ms","100ms"]#,"100ms"
+    small_window1 = ["250ms"]#,"250ms""150ms","200ms",
+    small_windows =[small_window1] # small_window1,small_window2,small_window3,small_window4,
     feature_name='vec[upstream,downstream,ratio]'
-    # feature_name='PacketAmount'
+    # # feature_name='PacketAmount'
     for i in range(len(small_windows)):
         small_window = small_windows[i]
         print(f"Small window: {small_window}")
         datasets = ts.prepare_datasets(dataset_name=dataset_name,
                                         small_windows=small_window,
-                                        dataset_type=dataset_type)
-        moment_model = ['moment']
-        model_types_1 = ['timesnet'] #,'nst', 'informer'
-        model_types_2 = ['autoformer']# 'timesnet',
+                                        dataset_type=dataset_type,
+                                        selected_feature_indices=[1, 4, 6]
+                                        ) # upstream, downstream, ratio)
+        # moment_model = ['moment']
+        model_types_1 = ['nst'] #, 'informer'
+        model_types_2 = ['autoformer','timesnet']
         model_types_3 = ['fedformer','timemixer']
         results_1 = ts.evaluate_models_on_datasets(datasets_dict=datasets,
                                                 model_types= model_types_1, #moment_model model_types_1
