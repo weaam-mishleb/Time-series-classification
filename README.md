@@ -1,23 +1,28 @@
-# Time-Series Classification 
-## This is still a Draft
+# Time-Series Classification Project
 
-Encrypted traffic calssification research by representing the netwirk traffic as time-series, and using SOTA transformers models, from TSlib https://github.com/thuml/Time-Series-Library
+**Project Status:** Draft
 
-Datasets: 
-1. UTMobile - https://github.com/YuqiangHeng/UTMobileNetTraffic2021 
-2. CESNET - https://zenodo.org/records/7409924, github: https://github.com/CESNET/cesnet-datazoo
+## Overview
+This is encrypted traffic classification research that represents network traffic as time-series data and uses state-of-the-art (SOTA) transformer models from TSlib (https://github.com/thuml/Time-Series-Library).
 
+## Datasets
+- **UTMobile** - https://github.com/YuqiangHeng/UTMobileNetTraffic2021
+- **CESNET** - https://zenodo.org/records/7409924
+  - GitHub: https://github.com/CESNET/cesnet-datazoo
 
-requierment: (for moment model library use python 3.11)
+## Requirements
+- Python 3.11 (recommended for the moment model library)
 
-Code:
-1.TimeseriesCreate.py - creating the suit time-series representation from the raw dataset (prefered raw as cvs files)
-2.TimeSeries_funtions.py - transformer model building train and evaluation and fetching the preproccesed data  
-3. main_program - running the the TimeSeries_funtions.py on all small_windows and transformers model
+## Code Structure
+1. **TimeseriesCreate.py** - Creates the appropriate time-series representation from raw datasets (preferably as CSV files)
+2. **TimeSeries_functions.py** - Handles transformer model building, training, evaluation, and preprocessed data fetching
+3. **main_program** - Runs TimeSeries_functions.py on all small windows and transformer models
 
-Addition:
-Notebooks (ipynb) for more specific data exploration and preproccessing (e.g., chosing the big window size)
+## Additional Resources
+- **Notebooks (.ipynb)** - Jupyter notebooks for more specific data exploration and preprocessing tasks (e.g., choosing the optimal big window size)
 
-Paper:
-
-Authors: Amit Dvir, Chen Hajaj, Shachar Ketz and CHanan Helman
+## Authors
+- Amit Dvir
+- Chen Hajaj
+- Shachar Ketz
+- Chanan Helman
