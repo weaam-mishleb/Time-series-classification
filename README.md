@@ -1,7 +1,5 @@
 # Time-Series Classification Project
 
-**Project Status:** Draft
-
 ## Overview
 This is encrypted traffic classification research that represents network traffic as time-series data and uses state-of-the-art (SOTA) transformer models from TSlib (https://github.com/thuml/Time-Series-Library).
 
