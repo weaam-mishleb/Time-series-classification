@@ -47,6 +47,20 @@ import re
 import logging
 
 
+######################## OUTPUT AND DATA PATHS ##############################
+
+# Absolute roots. Kept off $HOME: the root filesystem is ~83% full, while /data
+# is a local disk with room to spare. Overridable via environment variables.
+CHECKPOINTS_ROOT = os.environ.get('TS_CHECKPOINTS_ROOT', '/data/weaamm/checkpoints')
+RESULTS_ROOT = os.environ.get('TS_RESULTS_ROOT', '/data/weaamm/results')
+
+# Root of the preprocessed datasets on the shared NFS mount.
+DATA_ROOT = os.environ.get('TS_DATA_ROOT', '/media/Data/Datasets/chanan_data')
+
+os.makedirs(CHECKPOINTS_ROOT, exist_ok=True)
+os.makedirs(RESULTS_ROOT, exist_ok=True)
+
+
 ######################## GPU CHECKING AND SETUP ##############################
 
 # To check what gpu running eun the command "nvidia-smi".
@@ -116,9 +130,10 @@ class TimeSeriesConfig:
                  small_window='unknown',
                  criterion_type = 'CrossEntropyLoss',
                  optimizer_type = 'Adam',
-                 feature_name = 'TotalSize'
+                 feature_name = 'TotalSize',
+                 num_epochs = 150
                 ):
-        
+
         # Common configurations for all models
         self.task_name = 'classification'
         self.seq_len = seq_len  # Your sequence length
@@ -137,7 +152,7 @@ class TimeSeriesConfig:
         self.freq = 'h'
         self.batch_size = 256 #32#64 #512 #128
         self.learning_rate = 1e-4 #1e-5
-        self.num_epochs = 150 #5
+        self.num_epochs = num_epochs # default 150; lower it for calibration runs
         self.criterion_type = criterion_type #'CrossEntropyLoss' # 'CrossEntropyLoss','FocalLoss'
         self.optimizer_type = optimizer_type #'Adam' #'SGD','AdamW' ,'Adam'
         self.feature_name = feature_name #'TotalSize' # 'packetAmount'
@@ -146,7 +161,8 @@ class TimeSeriesConfig:
 
         # Other configs
         self.use_gpu = True if torch.cuda.is_available() else False
-        self.checkpoint_dir = f'checkpoints/{self.dataset_name}/{self.num_class}' # packets feature'
+        self.checkpoint_dir = os.path.join(CHECKPOINTS_ROOT, str(self.dataset_name), str(self.num_class)) # packets feature'
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
         self.classes_names = classes_names
         
         self.model_name = f'{model_type.lower()}_classifier'
@@ -1197,10 +1213,8 @@ def plot_metrics(train_losses, val_losses, train_accs, val_accs, config):
     save_dir = config.checkpoint_dir
     try:
         # Create directory if it doesn't exist
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-            print(f"Created directory: {save_dir}")
-        
+        os.makedirs(save_dir, exist_ok=True)
+
         print("\nPlotting Training Metrics...")
         
         # Create a figure with appropriate size
@@ -1299,9 +1313,7 @@ def plot_confusion_matrix(y_true, y_pred, config):
 
     try:
         # Ensure save directory exists
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-            print(f"Created directory: {save_dir}")
+        os.makedirs(save_dir, exist_ok=True)
 
         print("\nCreating confusion matrices...")
 
@@ -1741,7 +1753,8 @@ def create_model(X,
                  small_window ='unkown',
                  criterion_type='CrossEntropyLoss',
                  optimizer_type = 'Adam',
-                 feature_name = 'TotalSize'
+                 feature_name = 'TotalSize',
+                 num_epochs = 150
                  ):
     """Create model with specified configuration"""
     num_class, seq_len, num_features, classes_names =get_data_parameters(X,y)
@@ -1754,7 +1767,8 @@ def create_model(X,
                               small_window=small_window,
                               criterion_type=criterion_type,
                               optimizer_type=optimizer_type,
-                              feature_name=feature_name
+                              feature_name=feature_name,
+                              num_epochs=num_epochs
                              )
     
     if config.model_name == 'timesnet_classifier':
@@ -1798,20 +1812,20 @@ def prepare_datasets(dataset_name = "UTMobileNet",
         if dataset_type == "dir":
             logging.info("Preparing direction datasets for UTMobileNet")
             print("Preparing direction datasets for UTMobileNet")
-            base_path = "../../../data/Chanan/UTMobileNet/direction_dataset"
+            base_path = os.path.join(DATA_ROOT, "UTMobileNet", "direction_dataset")
         else:
             logging.info("Preparing datasets for UTMobileNet")
-            base_path = "../../../data/Chanan/UTMobileNet/dataset"
+            base_path = os.path.join(DATA_ROOT, "UTMobileNet", "dataset")
     # VisQuic
     elif dataset_name == "VisQuic":
-        base_path = "../../../data/Chanan/VisQUIC/datasets/unbalanced"
+        base_path = os.path.join(DATA_ROOT, "VisQUIC", "datasets", "unbalanced")
         # small_windows = ["1ms","5ms", "50ms","250ms"]
         # big_windows = ["1s"]
         class_counts = ["3 classes"]
   
     # QuicText
     elif dataset_name == "QuicText":
-        base_path = "../../../data/Chanan/QuicText/datasets"
+        base_path = os.path.join(DATA_ROOT, "QuicText", "datasets")
         
     if dataset_name == "VisQuic" or dataset_name == "QuicText" or dataset_name == "UTMobileNet":
         for class_count in class_counts:
@@ -1866,7 +1880,7 @@ def prepare_datasets(dataset_name = "UTMobileNet",
             for small_window in small_windows:
                 try:
                     # Construct file path dynamically
-                    data_path = f"../../../data/Chanan/Cesnet/data/direction_datasets/dir_cesnet_timeseries_{small_window}.csv"
+                    data_path = f"{DATA_ROOT}/Cesnet/data/direction_datasets/dir_cesnet_timeseries_{small_window}.csv"
                     
                     # Check if file exists
                     if not os.path.exists(data_path):
@@ -1901,7 +1915,7 @@ def prepare_datasets(dataset_name = "UTMobileNet",
             for small_window in small_windows:
                 try:
                     # Construct file path dynamically
-                    data_path = f"../../../data/Chanan/Cesnet/data/balanced_direction_datasets/balanced_dir_cesnet_timeseries_{small_window}.csv"
+                    data_path = f"{DATA_ROOT}/Cesnet/data/balanced_direction_datasets/balanced_dir_cesnet_timeseries_{small_window}.csv"
                     
                     # Check if file exists
                     if not os.path.exists(data_path):
@@ -1943,7 +1957,8 @@ def evaluate_models_on_datasets(datasets_dict,
                                 optimizer_type='Adam',
                                 feature_name="TotalSize",
                                 best_train_acc=0,
-                                start_epoch=0
+                                start_epoch=0,
+                                num_epochs=150
                                 ):
     """
     Pipeline for evaluating multiple models on multiple datasets
@@ -2008,7 +2023,8 @@ def evaluate_models_on_datasets(datasets_dict,
                                              small_window,
                                              criterion_type,
                                              optimizer_type,
-                                             feature_name)
+                                             feature_name,
+                                             num_epochs=num_epochs)
                 num_classes = config.num_class
                 print(f"\nProcessing dataset: {dataset_name}, sequence: {small_window}")
                 
@@ -2077,7 +2093,7 @@ def evaluate_models_on_datasets(datasets_dict,
     
     # Save results
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_dir = f'/home/chanan/Time-Series-Library/test/{dataset_name}/direction'
+    results_dir = os.path.join(RESULTS_ROOT, str(dataset_name), 'direction')
     os.makedirs(results_dir, exist_ok=True)
     
     # Create detailed filename
