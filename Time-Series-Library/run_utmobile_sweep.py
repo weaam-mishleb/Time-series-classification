@@ -52,6 +52,18 @@ ALL_MODELS = ["timesnet", "informer", "autoformer", "fedformer", "timemixer", "n
 # actually steps the optimizer more than once and per-batch averaging is exercised.
 FAST_DEV_BATCHES = 2
 
+# Which of the 8 per-slot features to load. Default [1,4,6] = upstream packet count,
+# downstream packet count, upstream/downstream byte ratio — the set every baseline
+# through B2 was measured with. TS_FEATURES overrides, e.g. "0,1,2,3,4,5,6,7".
+FEATURE_INDICES = [int(i) for i in
+                   os.environ.get('TS_FEATURES', '1,4,6').split(',') if i.strip() != '']
+
+# TS_SEED makes a run reproducible. Unset means unseeded, which is how every measurement
+# up to and including Phase 1a was taken — kept as the default so those stay reproducible
+# in the only sense they can be: not at all.
+SEED = os.environ.get('TS_SEED')
+SEED = int(SEED) if SEED not in (None, '') else None
+
 # Recent output lines, kept so a failed run can report why it failed. The library
 # prints its exception and returns normally, so the reason exists only in the output
 # stream - there is no exception object left for us to inspect.
@@ -297,7 +309,7 @@ def main():
                     dataset_name=args.dataset,
                     small_windows=[window],
                     dataset_type=args.dataset_type,
-                    selected_feature_indices=[1, 4, 6],  # upstream, downstream, ratio
+                    selected_feature_indices=FEATURE_INDICES,
                 )
                 log(f"load took {timedelta(seconds=int(time.time() - load_start))}")
             except Exception as e:
@@ -332,6 +344,12 @@ def main():
 
                 run_start = time.time()
                 results = None
+                # Re-seed per pair, not once per sweep: otherwise every run inherits the
+                # RNG state left by whatever ran before it, and a pair's result would
+                # depend on its position in the sweep.
+                if SEED is not None:
+                    ts.set_seed(SEED)
+                    log(f"seed {SEED}")
                 try:
                     results = ts.evaluate_models_on_datasets(
                         datasets_dict=datasets,

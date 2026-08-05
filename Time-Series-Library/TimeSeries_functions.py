@@ -1113,6 +1113,26 @@ def prepare_data(X, y, config, val_split=0.2, compute_weights=True):
     X_train, X_val = X[train_idx], X[val_idx]
     y_train, y_val = y[train_idx], y[val_idx]
 
+    # Per-feature standardization, fitted on TRAIN ROWS ONLY.
+    #
+    # Nothing in this pipeline scaled features before, and no model supplies it: TimesNet
+    # embeds raw values, and NST computes mean_enc/std_enc but still passes raw x_enc to
+    # enc_embedding. That was survivable only because [1,4,6] are packet counts and a
+    # ratio, all O(1e3). Byte volumes reach 2.28e6, a ~450,000x spread across features.
+    #
+    # The statistics come from X_train alone. Fitting on the full array would fold the
+    # validation distribution into the training signal — a quieter version of exactly the
+    # leakage the grouped split was built to remove.
+    if os.environ.get('TS_STANDARDIZE', '0') == '1':
+        mu = X_train.mean(axis=(0, 1), keepdims=True)
+        sigma = X_train.std(axis=(0, 1), keepdims=True)
+        sigma = np.where(sigma < 1e-8, 1.0, sigma)   # constant feature -> leave centred
+        X_train = (X_train - mu) / sigma
+        X_val = (X_val - mu) / sigma
+        print(f"[features] standardized on {len(train_idx)} train rows "
+              f"({X_train.shape[-1]} features)")
+        logging.info(f"Standardized with train-only stats: mu={mu.ravel()}, "
+                     f"sigma={sigma.ravel()}")
 
     # Compute class weights if requested. Done before any --fast-dev-run truncation
     # below, so the weights still come from the full split and a truncated subset that
@@ -1833,7 +1853,87 @@ def prepare_features_cesnet_selected(data_path, selected_feature_indices=[1,4,6]
     return selected_features, y_encoded, le
 
 # For direction datasets as in UTMobile & Cesnet, creating X only with selected features
-def prepare_features_UTMobiles_selected(data_path, selected_feature_indices=[1,4,6], num_features=8):
+# Feature layout of the assembled UTMobile CSVs, repeated once per time slot.
+UT_FEATURE_NAMES = ['total_size_up', 'packet_count_up', 'avg_payload_up',
+                    'total_size_down', 'packet_count_down', 'avg_payload_down',
+                    'ratio_up_down', 'time_from_start']
+# (size, packet_count, avg_payload) triples per direction — the repair operates on these.
+UT_DIRECTION_TRIPLES = ((0, 1, 2), (3, 4, 5))
+# Heavy-tailed, zero-inflated byte quantities. Counts, ratio and time stay linear.
+UT_LOG_FEATURES = (0, 2, 3, 5)
+MAX_IP_PACKET_BYTES = 65535
+
+
+def repair_ut_features(X, verbose=True):
+    """
+    Clamp physically impossible byte counts in place-safe fashion; returns a new array.
+
+    22 flows (0.65%, the same ones in every window) carry corrupt downstream byte counts
+    inherited from the original pcap parsing — five are exactly INT32_MAX (2,147,483,647)
+    and the rest run to 4.7e8. They went unnoticed because features 3 and 5 were never
+    loaded; `packet_count_down` for those slots is an unremarkable 1.
+
+    The bound is physical rather than a percentile: no IP packet exceeds 65,535 bytes, so
+    a slot's byte total cannot exceed `packet_count * 65535`. That catches 22 flows where
+    a flat >1e7 cutoff catches only 19 — three carry corrupt-but-smaller values. Upstream
+    is clean; only downstream violates.
+
+    Rows are repaired, never dropped. Dropping would take n from 3377 to 3355 and
+    invalidate every frozen split and all nine groups.csv alignments.
+    """
+    X = np.asarray(X, dtype=np.float64).copy()
+    touched = 0
+    for size_i, count_i, payload_i in UT_DIRECTION_TRIPLES:
+        bound = X[:, :, count_i] * MAX_IP_PACKET_BYTES
+        bad = X[:, :, size_i] > bound
+        if bad.any():
+            touched += int(bad.sum())
+            X[:, :, size_i] = np.where(bad, bound, X[:, :, size_i])
+            # avg_payload is size/count, so recompute it from the repaired total rather
+            # than clipping it separately and leaving the two mutually inconsistent.
+            with np.errstate(divide='ignore', invalid='ignore'):
+                recomputed = np.where(X[:, :, count_i] > 0,
+                                      X[:, :, size_i] / np.maximum(X[:, :, count_i], 1e-12),
+                                      0.0)
+            X[:, :, payload_i] = np.where(bad, recomputed, X[:, :, payload_i])
+    if verbose and touched:
+        msg = f"[features] repaired {touched} physically impossible byte cells"
+        print(msg)
+        logging.info(msg)
+    return X
+
+
+def set_seed(seed):
+    """
+    Seed the RNGs that control initialization and shuffling.
+
+    Nothing in this pipeline seeded anything before, which means B0, B1, B2 and Phase 1a
+    each ran from an uncontrolled initialization. It also means run-to-run variance was
+    never measured, so the +-2 point noise floor quoted throughout was inferred from
+    validation-set size alone rather than observed.
+
+    This does NOT make a run bit-reproducible, and it was verified not to: two runs at
+    TS_SEED=7 gave 90.69% and 90.49% validation accuracy. cuDNN and cuBLAS pick
+    non-deterministic kernels and reduce with atomics, which no seed can control. The
+    measured residual is ~0.2 accuracy points at a fixed seed.
+
+    cudnn.deterministic is deliberately NOT set: it changes which kernels run and would
+    make these numbers incomparable to everything measured so far. What the seed buys is
+    controlled *independent draws* across seeds, which is what a variance estimate needs
+    — exact repeatability is not required for that.
+    """
+    import random as _random
+    seed = int(seed)
+    _random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    return seed
+
+
+def prepare_features_UTMobiles_selected(data_path, selected_feature_indices=[1,4,6],
+                                        num_features=8, repair=None, log_transform=None):
     """
     Load and reshape UTMobile features, selecting only a subset of feature indices.
 
@@ -1841,20 +1941,42 @@ def prepare_features_UTMobiles_selected(data_path, selected_feature_indices=[1,4
     - data_path: path to the CSV
     - selected_feature_indices: list of indices to include (e.g., [1,4,6])
     - num_features: number of features per timestep (default: 8)
+    - repair: clamp impossible byte counts (default from TS_REPAIR_FEATURES, on)
+    - log_transform: log1p the byte features (default from TS_LOG_FEATURES, off)
+
+    Repair and log1p are both per-cell transforms — each output depends only on its own
+    row — so neither can move information between train and validation. Standardization
+    does depend on other rows and is therefore applied later, in prepare_data, using
+    train-set statistics only.
 
     Returns:
     - X: numpy array (samples, timesteps, selected_features)
     """
+    if repair is None:
+        repair = os.environ.get('TS_REPAIR_FEATURES', '1') == '1'
+    if log_transform is None:
+        log_transform = os.environ.get('TS_LOG_FEATURES', '0') == '1'
+
     df = pd.read_csv(data_path)
 
     total_timesteps = df.shape[1] // num_features
     all_features = df.values.reshape((df.shape[0], total_timesteps, num_features))
 
+    # Repair before slicing: bounding total_size needs packet_count, which the caller may
+    # not have selected.
+    if repair:
+        all_features = repair_ut_features(all_features)
+
+    if log_transform:
+        for i in UT_LOG_FEATURES:
+            all_features[:, :, i] = np.log1p(np.maximum(all_features[:, :, i], 0.0))
+
     # Select only the desired features
     selected_features = all_features[:, :, selected_feature_indices]
-    
+
     print("X shape: ", selected_features.shape)
-    logging.info(f"Prepared features with shape: {selected_features.shape}")
+    logging.info(f"Prepared features with shape: {selected_features.shape} "
+                 f"(repair={repair}, log1p={log_transform})")
     return selected_features
 
 # Create model based on configuration
