@@ -249,7 +249,8 @@ def main():
         log(f"windows ({len(args.windows)}): {', '.join(args.windows)}")
         log(f"total pairs: {len(args.models) * len(args.windows)}")
         log(f"log       -> {log_path}")
-        log(f"progress  -> {progress_path}")
+        log(f"progress  -> {progress_path}"
+            f"{' (not recorded for a fast-dev-run)' if args.fast_dev_run else ''}")
         log(f"results   -> {ts.RESULTS_ROOT}")
         log(f"checkpts  -> {ts.CHECKPOINTS_ROOT}")
         log(f"data root -> {ts.DATA_ROOT}")
@@ -351,8 +352,13 @@ def main():
                         print(results.to_string(index=False), flush=True)
                         outcomes.append((window, model, 'OK', elapsed, ''))
                         consecutive_failures = 0
-                        with open(progress_path, 'a') as pfh:
-                            pfh.write(pair + "\n")
+                        # A fast-dev-run pair trained for 1 epoch on 2 batches. Recording
+                        # it would make a later --resume skip it as finished, so the pair
+                        # would never actually be trained - the exact silent false success
+                        # this script exists to catch. Smoke tests stay out of the ledger.
+                        if not args.fast_dev_run:
+                            with open(progress_path, 'a') as pfh:
+                                pfh.write(pair + "\n")
                     else:
                         reason = failure_reason(model) or why
                         status = classify(reason)

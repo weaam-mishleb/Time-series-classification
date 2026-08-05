@@ -1,0 +1,70 @@
+# ---------------------------------------------------------------------------
+# Source code only. Everything heavy or regenerable stays out of the repo.
+# ---------------------------------------------------------------------------
+
+# Virtual environments -------------------------------------------------------
+# (~/tsenv lives outside this folder and so cannot be committed anyway, but keep
+#  these here in case an env is ever created inside the project.)
+tsenv/
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+
+# Python bytecode ------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.so
+
+# Model checkpoints and weights ----------------------------------------------
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.pkl
+*.pickle
+checkpoints/
+
+# Output roots ---------------------------------------------------------------
+# TS_CHECKPOINTS_ROOT / TS_RESULTS_ROOT point at /data/weaamm/, outside the repo.
+# These entries cover the case where someone repoints them at a relative path.
+/data/
+data/
+results/
+outputs/
+runs/
+
+# Logs -----------------------------------------------------------------------
+*.log
+sweep_logs/
+
+# Generated result data ------------------------------------------------------
+# Sweep and preprocessing output is regenerable and can reach many GB.
+# The handful of small result CSVs that predate this rule are kept explicitly
+# below so the repo still carries the published numbers.
+*.csv
+!Result and graphs/cesnet_pos_timeseries_50ms.csv
+!Result and graphs/cesnet_pos_timeseries_balanced_50ms.csv
+!Result and graphs/part_of_cesnet_with_pos.csv
+
+# Datasets -------------------------------------------------------------------
+*.parquet
+*.npy
+*.npz
+*.zip
+*.tar
+*.tar.gz
+*.pcap
+dataset/
+datasets/
+
+# Notebook checkpoints -------------------------------------------------------
+.ipynb_checkpoints/
+
+# Editor / OS ----------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo

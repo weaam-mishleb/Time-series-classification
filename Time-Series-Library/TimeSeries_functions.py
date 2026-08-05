@@ -61,6 +61,29 @@ os.makedirs(CHECKPOINTS_ROOT, exist_ok=True)
 os.makedirs(RESULTS_ROOT, exist_ok=True)
 
 
+######################## FILE DESCRIPTOR HARDENING ##########################
+
+# Torch's default 'file_descriptor' sharing strategy hands one fd to the parent for every
+# tensor a worker returns, and the parent reclaims them lazily. Across a long sweep those
+# outrun the reclaim and the process dies on "[Errno 24] Too many open files" - which is
+# exactly how the 2026-08-05 run ended. 'file_system' passes shared memory by name
+# instead, so the count does not grow with batches served.
+try:
+    torch.multiprocessing.set_sharing_strategy('file_system')
+except Exception as exc:
+    print(f"Warning: could not set sharing strategy to file_system: {exc}")
+
+# Raise the soft fd limit to whatever the hard limit allows. Cheap insurance: it costs
+# nothing when the limit is already generous and prevents a needless death when it isn't.
+try:
+    import resource
+    _soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if _soft < _hard:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (_hard, _hard))
+except Exception as exc:
+    print(f"Warning: could not raise RLIMIT_NOFILE: {exc}")
+
+
 ######################## GPU CHECKING AND SETUP ##############################
 
 # To check what gpu running eun the command "nvidia-smi".
@@ -1082,12 +1105,23 @@ def prepare_data(X, y, config, val_split=0.2, compute_weights=True):
     train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
     val_dataset = TensorDataset(torch.FloatTensor(X_val), torch.LongTensor(y_val))
 
-    # Configure DataLoader options for GPU-safe multiprocessing
+    # Configure DataLoader options.
+    #
+    # This used to be min(24, cpu_count()) -> 24 workers on each of the two loaders, so
+    # 48 forked processes per configuration. That is what exhausted the file descriptors
+    # and killed the 2026-08-05 sweep after 9 pairs ("[Errno 24] Too many open files"
+    # raised from os.pipe() while starting worker 25 of the val loader).
+    #
+    # Those workers bought nothing. train_dataset/val_dataset are TensorDatasets already
+    # fully materialised in RAM, so __getitem__ is a tensor slice - there is no disk read
+    # or decode to overlap. Worker processes only add fork cost, IPC serialisation of
+    # every batch, and one file descriptor per shared tensor. Loading in-process is both
+    # leak-free and faster for this shape of data (UTMobile 30ms is 11 batches).
+    #
+    # Override with TS_NUM_WORKERS if a future dataset really does need parallel loading.
     use_gpu = torch.cuda.is_available()
-    num_workers = min(24,multiprocessing.cpu_count()) if use_gpu else 2
+    num_workers = int(os.environ.get('TS_NUM_WORKERS', '0'))
     if limit_batches:
-        # Spawning 24 persistent workers per loader costs more than the smoke test
-        # itself, and keeps the FD pressure this run is meant to check.
         num_workers = 0
     print(f"Using {num_workers} workers for DataLoader")
     # Adjust DataLoader settings based on device
