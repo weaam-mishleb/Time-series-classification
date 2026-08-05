@@ -19024,3 +19024,385 @@ Using CrossEntropyLoss
 Using Adam optimizer
 Training:   0%|          | 0/150 [00:00<?, ?it/s]
 Epoch 1:   0%|          | 0/11 [00:00<?, ?it/s][A
+                                               [ATraining:   0%|          | 0/150 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/home/weaamm/Time-series-classifction/Time-Series-Library/TimeSeries_functions.py", line 2037, in evaluate_models_on_datasets
+    model, val_acc, eval_time_ms, best_metrics = train_classifier(
+  File "/home/weaamm/Time-series-classifction/Time-Series-Library/TimeSeries_functions.py", line 653, in train_classifier
+    for batch_x, batch_y in batch_pbar:
+  File "/usr/local/lib/python3.10/dist-packages/tqdm/std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 435, in __iter__
+    self._iterator = self._get_iterator()
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 388, in _get_iterator
+    return _MultiProcessingDataLoaderIter(self)
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1038, in __init__
+    w.start()
+  File "/usr/lib/python3.10/multiprocessing/process.py", line 121, in start
+    self._popen = self._Popen(self)
+  File "/usr/lib/python3.10/multiprocessing/context.py", line 281, in _Popen
+    return Popen(process_obj)
+  File "/usr/lib/python3.10/multiprocessing/popen_fork.py", line 19, in __init__
+    self._launch(process_obj)
+  File "/usr/lib/python3.10/multiprocessing/popen_fork.py", line 64, in _launch
+    parent_r, child_w = os.pipe()
+OSError: [Errno 24] Too many open files
+Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x7fcc644fa440>
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1477, in __del__
+    self._shutdown_workers()
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1436, in _shutdown_workers
+    self._mark_worker_as_unavailable(worker_id, shutdown=True)
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1378, in _mark_worker_as_unavailable
+    assert self._workers_status[worker_id] or (self._persistent_workers and shutdown)
+AttributeError: '_MultiProcessingDataLoaderIter' object has no attribute '_workers_status'
+Error processing UTMobileNet 250ms_5s_15 classes_21 with autoformer: [Errno 24] Too many open files
+
+Results saved to: /data/weaamm/results/UTMobileNet/direction/UTMobileNet_model_Adam_optimizer_CrossEntropyLoss_vec[upstream,downstream,ratio]_20260804_144133_detailed.csv
+[2026-08-04 14:41:33] OK 250ms / autoformer in 0:00:04
+     Model                Dataset Train Accuracy Train Precision Train Recall Train F1 Val Accuracy Val Precision Val Recall Val F1 Training Time Inference Time (ms)
+autoformer 250ms_5s_15 classes_21          Error           Error        Error    Error        Error         Error      Error  Error         Error               Error
+[2026-08-04 14:41:33] ----------------------------------------------------------------------
+[2026-08-04 14:41:33] RUN 250ms / fedformer
+[2026-08-04 14:41:33] ----------------------------------------------------------------------
+
+Evaluating FEDFORMER model across datasets...
+fourier enhanced block used!
+modes=32, index=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+fourier enhanced block used!
+modes=32, index=[0, 1, 2, 3, 4]
+ fourier enhanced cross attention used!
+modes_q=5, index_q=[0, 1, 2, 3, 4]
+modes_kv=10, index_kv=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+Processing dataset: UTMobileNet, sequence: 250ms_5s_15 classes_21
+Using 24 workers for DataLoader
+
+Model Configuration:
+--------------------------------------------------
+task_name: classification
+seq_len: 21
+pred_len: 0
+label_len: 0
+enc_in: 3
+dec_in: 1
+c_out: 1
+num_class: 15
+dropout: 0.1
+embed: timeF
+freq: h
+batch_size: 256
+learning_rate: 0.0001
+num_epochs: 150
+criterion_type: CrossEntropyLoss
+optimizer_type: Adam
+feature_name: vec[upstream,downstream,ratio]
+dataset_name: UTMobileNet
+small_window: 250ms_5s_15 classes_21
+use_gpu: True
+checkpoint_dir: /data/weaamm/checkpoints/UTMobileNet/15
+classes_names: ['Class_0', 'Class_1', 'Class_2', 'Class_3', 'Class_4', 'Class_5', 'Class_6', 'Class_7', 'Class_8', 'Class_9', 'Class_10', 'Class_11', 'Class_12', 'Class_13', 'Class_14']
+model_name: fedformer_classifier
+moving_avg: 25
+d_model: 64
+n_heads: 4
+e_layers: 2
+d_layers: 1
+d_ff: 256
+activation: gelu
+version: fourier
+mode_select: random
+modes: 32
+--------------------------------------------------
+Using CrossEntropyLoss
+Using Adam optimizer
+Training:   0%|          | 0/150 [00:00<?, ?it/s]
+Epoch 1:   0%|          | 0/11 [00:00<?, ?it/s][A
+                                               [ATraining:   0%|          | 0/150 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/home/weaamm/Time-series-classifction/Time-Series-Library/TimeSeries_functions.py", line 2037, in evaluate_models_on_datasets
+    model, val_acc, eval_time_ms, best_metrics = train_classifier(
+  File "/home/weaamm/Time-series-classifction/Time-Series-Library/TimeSeries_functions.py", line 653, in train_classifier
+    for batch_x, batch_y in batch_pbar:
+  File "/usr/local/lib/python3.10/dist-packages/tqdm/std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 435, in __iter__
+    self._iterator = self._get_iterator()
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 388, in _get_iterator
+    return _MultiProcessingDataLoaderIter(self)
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1038, in __init__
+    w.start()
+  File "/usr/lib/python3.10/multiprocessing/process.py", line 121, in start
+    self._popen = self._Popen(self)
+  File "/usr/lib/python3.10/multiprocessing/context.py", line 281, in _Popen
+    return Popen(process_obj)
+  File "/usr/lib/python3.10/multiprocessing/popen_fork.py", line 19, in __init__
+    self._launch(process_obj)
+  File "/usr/lib/python3.10/multiprocessing/popen_fork.py", line 64, in _launch
+    parent_r, child_w = os.pipe()
+OSError: [Errno 24] Too many open files
+Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x7fcc644fa440>
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1477, in __del__
+    self._shutdown_workers()
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1436, in _shutdown_workers
+    self._mark_worker_as_unavailable(worker_id, shutdown=True)
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1378, in _mark_worker_as_unavailable
+    assert self._workers_status[worker_id] or (self._persistent_workers and shutdown)
+AttributeError: '_MultiProcessingDataLoaderIter' object has no attribute '_workers_status'
+Error processing UTMobileNet 250ms_5s_15 classes_21 with fedformer: [Errno 24] Too many open files
+
+Results saved to: /data/weaamm/results/UTMobileNet/direction/UTMobileNet_model_Adam_optimizer_CrossEntropyLoss_vec[upstream,downstream,ratio]_20260804_144138_detailed.csv
+[2026-08-04 14:41:38] OK 250ms / fedformer in 0:00:04
+    Model                Dataset Train Accuracy Train Precision Train Recall Train F1 Val Accuracy Val Precision Val Recall Val F1 Training Time Inference Time (ms)
+fedformer 250ms_5s_15 classes_21          Error           Error        Error    Error        Error         Error      Error  Error         Error               Error
+[2026-08-04 14:41:38] ----------------------------------------------------------------------
+[2026-08-04 14:41:38] RUN 250ms / timemixer
+[2026-08-04 14:41:38] ----------------------------------------------------------------------
+
+Evaluating TIMEMIXER model across datasets...
+
+Processing dataset: UTMobileNet, sequence: 250ms_5s_15 classes_21
+Using 24 workers for DataLoader
+
+Model Configuration:
+--------------------------------------------------
+task_name: classification
+seq_len: 21
+pred_len: 0
+label_len: 0
+enc_in: 3
+dec_in: 1
+c_out: 1
+num_class: 15
+dropout: 0.1
+embed: timeF
+freq: h
+batch_size: 256
+learning_rate: 0.0001
+num_epochs: 150
+criterion_type: CrossEntropyLoss
+optimizer_type: Adam
+feature_name: vec[upstream,downstream,ratio]
+dataset_name: UTMobileNet
+small_window: 250ms_5s_15 classes_21
+use_gpu: True
+checkpoint_dir: /data/weaamm/checkpoints/UTMobileNet/15
+classes_names: ['Class_0', 'Class_1', 'Class_2', 'Class_3', 'Class_4', 'Class_5', 'Class_6', 'Class_7', 'Class_8', 'Class_9', 'Class_10', 'Class_11', 'Class_12', 'Class_13', 'Class_14']
+model_name: timemixer_classifier
+moving_avg: 25
+down_sampling_window: 2
+down_sampling_layers: 2
+decomp_method: moving_avg
+top_k: 5
+down_sampling_method: avg
+channel_independence: False
+d_model: 64
+e_layers: 2
+d_ff: 256
+use_norm: 1
+--------------------------------------------------
+Using CrossEntropyLoss
+Using Adam optimizer
+Training:   0%|          | 0/150 [00:00<?, ?it/s]
+Epoch 1:   0%|          | 0/11 [00:00<?, ?it/s][A
+                                               [ATraining:   0%|          | 0/150 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/home/weaamm/Time-series-classifction/Time-Series-Library/TimeSeries_functions.py", line 2037, in evaluate_models_on_datasets
+    model, val_acc, eval_time_ms, best_metrics = train_classifier(
+  File "/home/weaamm/Time-series-classifction/Time-Series-Library/TimeSeries_functions.py", line 653, in train_classifier
+    for batch_x, batch_y in batch_pbar:
+  File "/usr/local/lib/python3.10/dist-packages/tqdm/std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 435, in __iter__
+    self._iterator = self._get_iterator()
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 388, in _get_iterator
+    return _MultiProcessingDataLoaderIter(self)
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1038, in __init__
+    w.start()
+  File "/usr/lib/python3.10/multiprocessing/process.py", line 121, in start
+    self._popen = self._Popen(self)
+  File "/usr/lib/python3.10/multiprocessing/context.py", line 281, in _Popen
+    return Popen(process_obj)
+  File "/usr/lib/python3.10/multiprocessing/popen_fork.py", line 19, in __init__
+    self._launch(process_obj)
+  File "/usr/lib/python3.10/multiprocessing/popen_fork.py", line 64, in _launch
+    parent_r, child_w = os.pipe()
+OSError: [Errno 24] Too many open files
+Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x7fcc644fa440>
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1477, in __del__
+    self._shutdown_workers()
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1436, in _shutdown_workers
+    self._mark_worker_as_unavailable(worker_id, shutdown=True)
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1378, in _mark_worker_as_unavailable
+    assert self._workers_status[worker_id] or (self._persistent_workers and shutdown)
+AttributeError: '_MultiProcessingDataLoaderIter' object has no attribute '_workers_status'
+Error processing UTMobileNet 250ms_5s_15 classes_21 with timemixer: [Errno 24] Too many open files
+
+Results saved to: /data/weaamm/results/UTMobileNet/direction/UTMobileNet_model_Adam_optimizer_CrossEntropyLoss_vec[upstream,downstream,ratio]_20260804_144142_detailed.csv
+[2026-08-04 14:41:42] OK 250ms / timemixer in 0:00:04
+    Model                Dataset Train Accuracy Train Precision Train Recall Train F1 Val Accuracy Val Precision Val Recall Val F1 Training Time Inference Time (ms)
+timemixer 250ms_5s_15 classes_21          Error           Error        Error    Error        Error         Error      Error  Error         Error               Error
+[2026-08-04 14:41:42] ----------------------------------------------------------------------
+[2026-08-04 14:41:42] RUN 250ms / nst
+[2026-08-04 14:41:42] ----------------------------------------------------------------------
+
+Evaluating NST model across datasets...
+
+Processing dataset: UTMobileNet, sequence: 250ms_5s_15 classes_21
+Using 24 workers for DataLoader
+
+Model Configuration:
+--------------------------------------------------
+task_name: classification
+seq_len: 21
+pred_len: 0
+label_len: 0
+enc_in: 3
+dec_in: 1
+c_out: 1
+num_class: 15
+dropout: 0.1
+embed: timeF
+freq: h
+batch_size: 64
+learning_rate: 0.0001
+num_epochs: 150
+criterion_type: CrossEntropyLoss
+optimizer_type: Adam
+feature_name: vec[upstream,downstream,ratio]
+dataset_name: UTMobileNet
+small_window: 250ms_5s_15 classes_21
+use_gpu: True
+checkpoint_dir: /data/weaamm/checkpoints/UTMobileNet/15
+classes_names: ['Class_0', 'Class_1', 'Class_2', 'Class_3', 'Class_4', 'Class_5', 'Class_6', 'Class_7', 'Class_8', 'Class_9', 'Class_10', 'Class_11', 'Class_12', 'Class_13', 'Class_14']
+model_name: nst_classifier
+d_model: 64
+n_heads: 4
+e_layers: 2
+d_layers: 1
+d_ff: 256
+factor: 5
+p_hidden_dims: [128, 64]
+p_hidden_layers: 2
+activation: gelu
+output_attention: True
+--------------------------------------------------
+Using CrossEntropyLoss
+Using Adam optimizer
+Training:   0%|          | 0/150 [00:00<?, ?it/s]
+Epoch 1:   0%|          | 0/43 [00:00<?, ?it/s][A
+                                               [ATraining:   0%|          | 0/150 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/home/weaamm/Time-series-classifction/Time-Series-Library/TimeSeries_functions.py", line 2037, in evaluate_models_on_datasets
+    model, val_acc, eval_time_ms, best_metrics = train_classifier(
+  File "/home/weaamm/Time-series-classifction/Time-Series-Library/TimeSeries_functions.py", line 653, in train_classifier
+    for batch_x, batch_y in batch_pbar:
+  File "/usr/local/lib/python3.10/dist-packages/tqdm/std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 435, in __iter__
+    self._iterator = self._get_iterator()
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 388, in _get_iterator
+    return _MultiProcessingDataLoaderIter(self)
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1038, in __init__
+    w.start()
+  File "/usr/lib/python3.10/multiprocessing/process.py", line 121, in start
+    self._popen = self._Popen(self)
+  File "/usr/lib/python3.10/multiprocessing/context.py", line 281, in _Popen
+    return Popen(process_obj)
+  File "/usr/lib/python3.10/multiprocessing/popen_fork.py", line 19, in __init__
+    self._launch(process_obj)
+  File "/usr/lib/python3.10/multiprocessing/popen_fork.py", line 64, in _launch
+    parent_r, child_w = os.pipe()
+OSError: [Errno 24] Too many open files
+Exception ignored in: <function _MultiProcessingDataLoaderIter.__del__ at 0x7fcc644fa440>
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1477, in __del__
+    self._shutdown_workers()
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1436, in _shutdown_workers
+    self._mark_worker_as_unavailable(worker_id, shutdown=True)
+  File "/usr/local/lib/python3.10/dist-packages/torch/utils/data/dataloader.py", line 1378, in _mark_worker_as_unavailable
+    assert self._workers_status[worker_id] or (self._persistent_workers and shutdown)
+AttributeError: '_MultiProcessingDataLoaderIter' object has no attribute '_workers_status'
+Error processing UTMobileNet 250ms_5s_15 classes_21 with nst: [Errno 24] Too many open files
+
+Results saved to: /data/weaamm/results/UTMobileNet/direction/UTMobileNet_model_Adam_optimizer_CrossEntropyLoss_vec[upstream,downstream,ratio]_20260804_144147_detailed.csv
+[2026-08-04 14:41:47] OK 250ms / nst in 0:00:04
+Model                Dataset Train Accuracy Train Precision Train Recall Train F1 Val Accuracy Val Precision Val Recall Val F1 Training Time Inference Time (ms)
+  nst 250ms_5s_15 classes_21          Error           Error        Error    Error        Error         Error      Error  Error         Error               Error
+
+[2026-08-04 14:41:47] ======================================================================
+[2026-08-04 14:41:47] SWEEP DONE in 0:16:28
+[2026-08-04 14:41:47] ======================================================================
+[2026-08-04 14:41:47] 54/66 pair(s) completed
+[2026-08-04 14:41:47] window   model        status                   elapsed
+[2026-08-04 14:41:47] 5ms      timesnet     SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 5ms      informer     SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 5ms      autoformer   SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 5ms      fedformer    SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 5ms      timemixer    SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 5ms      nst          SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 10ms     timesnet     SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 10ms     informer     SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 10ms     autoformer   SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 10ms     fedformer    SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 10ms     timemixer    SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 10ms     nst          SKIPPED (no data)        0:00:00
+[2026-08-04 14:41:47] 20ms     timesnet     OK                       0:00:05
+[2026-08-04 14:41:47] 20ms     informer     OK                       0:01:25
+[2026-08-04 14:41:47] 20ms     autoformer   OK                       0:00:04
+[2026-08-04 14:41:47] 20ms     fedformer    OK                       0:01:38
+[2026-08-04 14:41:47] 20ms     timemixer    OK                       0:00:04
+[2026-08-04 14:41:47] 20ms     nst          OK                       0:00:55
+[2026-08-04 14:41:47] 30ms     timesnet     OK                       0:05:00
+[2026-08-04 14:41:47] 30ms     informer     OK                       0:01:08
+[2026-08-04 14:41:47] 30ms     autoformer   OK                       0:00:05
+[2026-08-04 14:41:47] 30ms     fedformer    OK                       0:01:54
+[2026-08-04 14:41:47] 30ms     timemixer    OK                       0:00:33
+[2026-08-04 14:41:47] 30ms     nst          OK                       0:00:06
+[2026-08-04 14:41:47] 40ms     timesnet     OK                       0:00:04
+[2026-08-04 14:41:47] 40ms     informer     OK                       0:00:05
+[2026-08-04 14:41:47] 40ms     autoformer   OK                       0:00:04
+[2026-08-04 14:41:47] 40ms     fedformer    OK                       0:00:04
+[2026-08-04 14:41:47] 40ms     timemixer    OK                       0:00:04
+[2026-08-04 14:41:47] 40ms     nst          OK                       0:00:04
+[2026-08-04 14:41:47] 50ms     timesnet     OK                       0:00:04
+[2026-08-04 14:41:47] 50ms     informer     OK                       0:00:05
+[2026-08-04 14:41:47] 50ms     autoformer   OK                       0:00:05
+[2026-08-04 14:41:47] 50ms     fedformer    OK                       0:00:04
+[2026-08-04 14:41:47] 50ms     timemixer    OK                       0:00:04
+[2026-08-04 14:41:47] 50ms     nst          OK                       0:00:04
+[2026-08-04 14:41:47] 75ms     timesnet     OK                       0:00:04
+[2026-08-04 14:41:47] 75ms     informer     OK                       0:00:05
+[2026-08-04 14:41:47] 75ms     autoformer   OK                       0:00:04
+[2026-08-04 14:41:47] 75ms     fedformer    OK                       0:00:04
+[2026-08-04 14:41:47] 75ms     timemixer    OK                       0:00:04
+[2026-08-04 14:41:47] 75ms     nst          OK                       0:00:04
+[2026-08-04 14:41:47] 100ms    timesnet     OK                       0:00:04
+[2026-08-04 14:41:47] 100ms    informer     OK                       0:00:05
+[2026-08-04 14:41:47] 100ms    autoformer   OK                       0:00:04
+[2026-08-04 14:41:47] 100ms    fedformer    OK                       0:00:04
+[2026-08-04 14:41:47] 100ms    timemixer    OK                       0:00:04
+[2026-08-04 14:41:47] 100ms    nst          OK                       0:00:04
+[2026-08-04 14:41:47] 150ms    timesnet     OK                       0:00:04
+[2026-08-04 14:41:47] 150ms    informer     OK                       0:00:05
+[2026-08-04 14:41:47] 150ms    autoformer   OK                       0:00:04
+[2026-08-04 14:41:47] 150ms    fedformer    OK                       0:00:04
+[2026-08-04 14:41:47] 150ms    timemixer    OK                       0:00:04
+[2026-08-04 14:41:47] 150ms    nst          OK                       0:00:04
+[2026-08-04 14:41:47] 200ms    timesnet     OK                       0:00:04
+[2026-08-04 14:41:47] 200ms    informer     OK                       0:00:04
+[2026-08-04 14:41:47] 200ms    autoformer   OK                       0:00:04
+[2026-08-04 14:41:47] 200ms    fedformer    OK                       0:00:04
+[2026-08-04 14:41:47] 200ms    timemixer    OK                       0:00:04
+[2026-08-04 14:41:47] 200ms    nst          OK                       0:00:04
+[2026-08-04 14:41:47] 250ms    timesnet     OK                       0:00:04
+[2026-08-04 14:41:47] 250ms    informer     OK                       0:00:04
+[2026-08-04 14:41:47] 250ms    autoformer   OK                       0:00:04
+[2026-08-04 14:41:47] 250ms    fedformer    OK                       0:00:04
+[2026-08-04 14:41:47] 250ms    timemixer    OK                       0:00:04
+[2026-08-04 14:41:47] 250ms    nst          OK                       0:00:04
+
+[2026-08-04 14:41:47] per-run CSVs are under /data/weaamm/results/UTMobileNet/direction
+[2026-08-04 14:41:47] full log: /data/weaamm/results/UTMobileNet/sweep_logs/sweep_20260804_142518.log

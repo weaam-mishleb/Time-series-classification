@@ -131,7 +131,8 @@ class TimeSeriesConfig:
                  criterion_type = 'CrossEntropyLoss',
                  optimizer_type = 'Adam',
                  feature_name = 'TotalSize',
-                 num_epochs = 150
+                 num_epochs = 150,
+                 limit_batches = None
                 ):
 
         # Common configurations for all models
@@ -153,6 +154,9 @@ class TimeSeriesConfig:
         self.batch_size = 256 #32#64 #512 #128
         self.learning_rate = 1e-4 #1e-5
         self.num_epochs = num_epochs # default 150; lower it for calibration runs
+        # None = use the whole split. An int caps each loader at that many batches, which
+        # is what --fast-dev-run uses to exercise the full code path in seconds.
+        self.limit_batches = limit_batches
         self.criterion_type = criterion_type #'CrossEntropyLoss' # 'CrossEntropyLoss','FocalLoss'
         self.optimizer_type = optimizer_type #'Adam' #'SGD','AdamW' ,'Adam'
         self.feature_name = feature_name #'TotalSize' # 'packetAmount'
@@ -504,10 +508,33 @@ class FocalLoss(nn.Module):
 
 def cleanup_dataloaders(*loaders, sleep_time=1):
     """
-    Explicitly delete dataloaders to ensure worker processes shut down.
+    Explicitly shut down dataloader worker processes.
+
+    `del loader` inside the loop only unbinds the local loop variable - the caller's
+    reference and the `loaders` tuple both still hold the object, so the workers keep
+    running and their file descriptors stay open. prepare_data builds each loader with
+    num_workers=24 and persistent_workers=True, so a sweep leaked ~48 worker processes
+    per configuration and eventually died on "[Errno 24] Too many open files".
+
+    Shut the worker pool down explicitly instead of hoping refcounting gets to it. The
+    caller is still responsible for dropping its own references afterwards.
     """
     for loader in loaders:
-        del loader
+        if loader is None:
+            continue
+        iterator = getattr(loader, '_iterator', None)
+        if iterator is not None:
+            # _MultiProcessingDataLoaderIter joins its workers and closes their pipes.
+            shutdown = getattr(iterator, '_shutdown_workers', None)
+            if shutdown is not None:
+                try:
+                    shutdown()
+                except Exception as exc:  # never let cleanup mask the real failure
+                    print(f"Warning: dataloader worker shutdown failed: {exc}")
+            try:
+                loader._iterator = None
+            except Exception:
+                pass
     gc.collect()
     time.sleep(sleep_time)
 
@@ -1033,18 +1060,35 @@ def prepare_data(X, y, config, val_split=0.2, compute_weights=True):
         X, y, test_size=val_split, random_state=32, stratify=y
     )
     
-    # Compute class weights if requested
+    # Compute class weights if requested. Done before any --fast-dev-run truncation
+    # below, so the weights still come from the full split and a truncated subset that
+    # happens to miss a class cannot make compute_class_weight raise.
     class_weights = None
     if compute_weights:
         class_weights = get_class_weights(y_train)
-    
+
+    # --fast-dev-run: keep only enough rows for `limit_batches` batches per loader. Every
+    # consumer of the data (training loop, validation loop, final evaluate_model) reads
+    # through these two loaders, so capping here bounds all of them consistently.
+    limit_batches = getattr(config, 'limit_batches', None)
+    if limit_batches:
+        keep = max(1, int(limit_batches)) * batch_size
+        X_train, y_train = X_train[:keep], y_train[:keep]
+        X_val, y_val = X_val[:keep], y_val[:keep]
+        print(f"limit_batches={limit_batches}: truncated to "
+              f"{len(X_train)} train / {len(X_val)} val samples")
+
     # Create datasets
     train_dataset = TensorDataset(torch.FloatTensor(X_train), torch.LongTensor(y_train))
     val_dataset = TensorDataset(torch.FloatTensor(X_val), torch.LongTensor(y_val))
-    
+
     # Configure DataLoader options for GPU-safe multiprocessing
     use_gpu = torch.cuda.is_available()
     num_workers = min(24,multiprocessing.cpu_count()) if use_gpu else 2
+    if limit_batches:
+        # Spawning 24 persistent workers per loader costs more than the smoke test
+        # itself, and keeps the FD pressure this run is meant to check.
+        num_workers = 0
     print(f"Using {num_workers} workers for DataLoader")
     # Adjust DataLoader settings based on device
     loader_args = {
@@ -1052,9 +1096,12 @@ def prepare_data(X, y, config, val_split=0.2, compute_weights=True):
         'num_workers': num_workers,
         'pin_memory': use_gpu,
         'persistent_workers': True if num_workers > 0 else False,
-        'multiprocessing_context': 'fork'
     }
-    
+    if num_workers > 0:
+        # DataLoader rejects multiprocessing_context when num_workers == 0.
+        loader_args['multiprocessing_context'] = 'fork'
+
+
     train_loader = DataLoader(train_dataset, shuffle=True, **loader_args)
     val_loader = DataLoader(val_dataset, shuffle=False, **loader_args)
     
@@ -1754,7 +1801,8 @@ def create_model(X,
                  criterion_type='CrossEntropyLoss',
                  optimizer_type = 'Adam',
                  feature_name = 'TotalSize',
-                 num_epochs = 150
+                 num_epochs = 150,
+                 limit_batches = None
                  ):
     """Create model with specified configuration"""
     num_class, seq_len, num_features, classes_names =get_data_parameters(X,y)
@@ -1768,7 +1816,8 @@ def create_model(X,
                               criterion_type=criterion_type,
                               optimizer_type=optimizer_type,
                               feature_name=feature_name,
-                              num_epochs=num_epochs
+                              num_epochs=num_epochs,
+                              limit_batches=limit_batches
                              )
     
     if config.model_name == 'timesnet_classifier':
@@ -1958,7 +2007,8 @@ def evaluate_models_on_datasets(datasets_dict,
                                 feature_name="TotalSize",
                                 best_train_acc=0,
                                 start_epoch=0,
-                                num_epochs=150
+                                num_epochs=150,
+                                limit_batches=None
                                 ):
     """
     Pipeline for evaluating multiple models on multiple datasets
@@ -2013,7 +2063,13 @@ def evaluate_models_on_datasets(datasets_dict,
             temp_results = {k: None for k in results.keys()}
             temp_results['Model'] = model_type
             temp_results['Dataset'] = small_window
-            
+
+            # Bind these up front: the finally block below runs even when create_model or
+            # prepare_data raises, and it must not trip over an unbound name.
+            model = None
+            train_loader = None
+            val_loader = None
+
             try:
                 # Create model and get config
                 model, config = create_model(X,
@@ -2024,7 +2080,8 @@ def evaluate_models_on_datasets(datasets_dict,
                                              criterion_type,
                                              optimizer_type,
                                              feature_name,
-                                             num_epochs=num_epochs)
+                                             num_epochs=num_epochs,
+                                             limit_batches=limit_batches)
                 num_classes = config.num_class
                 print(f"\nProcessing dataset: {dataset_name}, sequence: {small_window}")
                 
@@ -2043,9 +2100,6 @@ def evaluate_models_on_datasets(datasets_dict,
                     start_epoch=start_epoch,
                     class_weights=class_weights if use_class_weights else None
                 )
-
-                # Explicit cleanup to avoid too many open files
-                cleanup_dataloaders(train_loader, val_loader)
 
                 training_time = time.time() - start_time
                 
@@ -2066,12 +2120,27 @@ def evaluate_models_on_datasets(datasets_dict,
             except Exception as e:
                 print(f"Error processing {dataset_name} {small_window} with {model_type}: {str(e)}")
                 traceback.print_exc()
-                
+
                 # Mark all metrics as error
                 for key in results.keys():
                     if key not in ['Model', 'Dataset']:
                         temp_results[key] = "Error"
-            
+
+            finally:
+                # Runs on the error path too. This cleanup used to sit at the end of the
+                # try block, so a CUDA OOM skipped it and leaked the DataLoader worker
+                # file descriptors; after a handful of OOMs every remaining run in a sweep
+                # died on "[Errno 24] Too many open files".
+                # Dropping our own references is what actually frees them -
+                # cleanup_dataloaders only deletes its local parameter names and cannot
+                # release the caller's bindings, which otherwise survive the iteration.
+                cleanup_dataloaders(train_loader, val_loader)
+                model = None
+                train_loader = None
+                val_loader = None
+                gc.collect()
+                torch.cuda.empty_cache()
+
             # Now add all temp results to the main results dictionary
             for key, value in temp_results.items():
                 results[key].append(value)
