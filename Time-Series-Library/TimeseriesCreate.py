@@ -1,4 +1,5 @@
 import os
+import re
 import pandas as pd
 import numpy as np
 from collections import Counter
@@ -700,6 +701,41 @@ def create_direction_dataset(input_dirs, output_dir, window_size=5, balance_clas
     else:
         print("⚠️ No valid samples found, dataset not created.")
 
+_UTMOBILE_CAPTURE_RE = re.compile(
+    r'^timeseries_([^_]+)_(.+)_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_([0-9a-f]+)\.csv$')
+
+
+def parse_utmobile_capture_id(file_path):
+    """
+    Recover capture provenance from an intermediate filename.
+
+    UTMobile intermediates are named
+    ``timeseries_{app}_{action}_{YYYY-MM-DD}_{HH-MM-SS}_{device}.csv``; multi-word apps
+    are hyphenated ("google-maps"), so the app is everything before the first underscore.
+
+    The capture group is ``(app, action, date)`` — 53 groups over the 3,434 files, with
+    every class holding at least two. Grouping on ``(action, date)`` alone yields 47 but
+    is wrong for splitting: "browse" on a given day spans several apps, so such a group
+    straddles classes and cannot be assigned to one side of a split.
+
+    Returns None when the name does not match, so callers can fail loudly instead of
+    silently emitting a group column full of nulls.
+    """
+    m = _UTMOBILE_CAPTURE_RE.match(os.path.basename(file_path))
+    if m is None:
+        return None
+    app, action, date, tm, device = m.groups()
+    return {
+        'app': app,
+        'action': action,
+        'date': date,
+        'time': tm,
+        'device': device,
+        'capture_group': f'{app}_{action}_{date}',
+        'source_file': os.path.basename(file_path),
+    }
+
+
 def create_direction_dataset_for_utmobile(input_dirs, output_dir, window_size=5, balance_classes=False):
     """
     Create a dataset from the first window_size timesteps of each sample, organized by direction.
@@ -795,8 +831,12 @@ def create_direction_dataset_for_utmobile(input_dirs, output_dir, window_size=5,
                             padding_df = pd.DataFrame(0, index=range(padding_rows), columns=sample.columns)
                             sample = pd.concat([sample, padding_df], ignore_index=True)
 
-                        # Store valid (features, label) pairs
-                        valid_samples[class_label].append((sample.values.flatten(), class_label))
+                        # Store valid (features, label, provenance) triples. The source
+                        # path rides along with the sample so groups.csv cannot drift out
+                        # of alignment with features.csv: both are emitted from this one
+                        # list, in this one order.
+                        valid_samples[class_label].append(
+                            (sample.values.flatten(), class_label, file_path))
 
                     except Exception as e:
                         print(f"Error processing {file_path}: {e}")
@@ -811,27 +851,47 @@ def create_direction_dataset_for_utmobile(input_dirs, output_dir, window_size=5,
     # Final lists for dataset
     all_features = []
     all_labels = []
+    all_groups = []
 
     # Collect balanced samples
     for class_label, samples in valid_samples.items():
         selected_samples = samples if not balance_classes else random.sample(samples, min_class_size)
-        
-        for feature_vector, label in selected_samples:
+
+        for feature_vector, label, file_path in selected_samples:
             all_features.append(feature_vector)
             all_labels.append(label)
+
+            meta = parse_utmobile_capture_id(file_path)
+            if meta is None:
+                raise ValueError(
+                    f"Cannot parse capture id from {file_path}. groups.csv would be "
+                    "incomplete and any grouped split built on it would silently leak.")
+            meta['row'] = len(all_features) - 1
+            meta['label'] = label
+            meta['class_dir'] = os.path.basename(os.path.dirname(file_path))
+            all_groups.append(meta)
 
     # Convert lists to DataFrame with proper headers
     if all_features:
         X = pd.DataFrame(all_features, columns=header)
         y = pd.Series(all_labels, name='label')
-        
+        groups = pd.DataFrame(all_groups, columns=[
+            'row', 'label', 'class_dir', 'app', 'action', 'date', 'time', 'device',
+            'capture_group', 'source_file'])
+
+        # Row i of groups.csv describes row i of features.csv, by construction above.
+        assert len(groups) == len(X) == len(y), "groups/features/labels length mismatch"
+
         # Save combined datasets
         X.to_csv(os.path.join(output_dir, 'features.csv'), index=False)
         y.to_csv(os.path.join(output_dir, 'labels.csv'), index=False, header=True)
+        groups.to_csv(os.path.join(output_dir, 'groups.csv'), index=False)
 
         print(f"⏩ in total skip {counter} samples")
         print(f"✅ Saved {len(all_features)} samples to {output_dir}")
         print(f"Feature shape: {X.shape}")
+        print(f"🔗 groups.csv: {groups['capture_group'].nunique()} capture groups "
+              f"over {groups['class_dir'].nunique()} classes")
     else:
         print("⚠️ No valid samples found, dataset not created.")
 

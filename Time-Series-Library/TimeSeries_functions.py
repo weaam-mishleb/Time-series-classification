@@ -46,6 +46,8 @@ import re
 
 import logging
 
+import splits
+
 
 ######################## OUTPUT AND DATA PATHS ##############################
 
@@ -643,7 +645,9 @@ def train_classifier(train_loader,
             print(f"Using Adam optimizer as DEFAULT")
             optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
 
-     # Initialize learning rate scheduler - monitoring TRAINING loss
+     # Initialize learning rate scheduler - monitoring VALIDATION loss.
+     # Was training loss, which decays almost monotonically and therefore almost never
+     # triggered a reduction; validation loss is what actually plateaus.
     scheduler = ReduceLROnPlateau(
         optimizer=optimizer,
         mode='min',
@@ -652,13 +656,18 @@ def train_classifier(train_loader,
         min_lr=1e-7,       # Don't go below this LR
         verbose=True
     )
-    
-    # Initialize early stopping - monitoring TRAINING loss
+
+    # Initialize early stopping - monitoring VALIDATION Macro-F1.
+    # Was training loss with patience=2, i.e. training stopped when the model stopped
+    # fitting the training set and the checkpoint kept was the best-on-training one.
+    # That made ~99% training accuracy the explicit optimisation target and is the
+    # direct cause of the observed train/val gap. Macro-F1 (not accuracy) because the
+    # dataset is 4.4x imbalanced and Macro-F1 is the metric the paper reports.
     early_stopping = EarlyStopping(
         scheduler=scheduler,    # Pass scheduler so it can check LR
-        patience=2,             # Stop after 2 epochs without improvement
-        delta=0.001,            # Minimum improvement to reset counter
-        mode='min',             # Monitor loss (use 'max' for accuracy)
+        patience=8,             # Was 2: a validation metric is noisier than train loss
+        delta=0.1,              # 0.1 Macro-F1 points; below that is run-to-run noise
+        mode='max',             # Macro-F1 is maximised
         verbose=True,
         restore_best_weights=True
     )
@@ -669,7 +678,10 @@ def train_classifier(train_loader,
     train_accs = []
     val_accs = []
     
-    # Track best metrics based on TRAINING data
+    # Track best metrics. Selection is on val_f1 (see the epoch loop); the train_*
+    # entries are recorded at the best-validation epoch for reporting only.
+    # `best_train_acc` now only seeds the reported train accuracy on a resumed run --
+    # it no longer influences which checkpoint is kept.
     best_metrics = {
         'train_acc': best_train_acc,
         'train_precision': 0,
@@ -829,29 +841,33 @@ def train_classifier(train_loader,
         val_losses.append(avg_val_loss)
         val_accs.append(val_accuracy)
         
-        # Update learning rate based on TRAINING loss
-        scheduler.step(avg_train_loss)
-        
-        # Check early stopping condition using TRAINING loss
-        early_stopping(avg_train_loss, model)
+        # Update learning rate based on VALIDATION loss
+        scheduler.step(avg_val_loss)
 
-        # Save best model based on TRAINING accuracy
-        if train_accuracy > best_metrics['train_acc']:
+        # Check early stopping condition using VALIDATION Macro-F1
+        early_stopping(val_f1, model)
+
+        # Save best model based on VALIDATION Macro-F1.
+        # Previously keyed on train_accuracy, which selected the most over-fitted
+        # checkpoint of the run. The recorded train_* metrics below are now those of
+        # the best-validation epoch, so the train/val gap they show is a real
+        # generalisation gap rather than an artefact of the selection rule.
+        if val_f1 > best_metrics['val_f1']:
             best_metrics['train_acc'] = train_accuracy
             best_metrics['train_precision'] = train_precision
             best_metrics['train_recall'] = train_recall
             best_metrics['train_f1'] = train_f1
-            best_metrics['val_acc'] = val_accuracy  # Still record validation metrics
+            best_metrics['val_acc'] = val_accuracy
             best_metrics['val_precision'] = val_precision
             best_metrics['val_recall'] = val_recall
             best_metrics['val_f1'] = val_f1
             best_metrics['epoch'] = epoch
             best_metrics['train_confusion_matrix'] = confusion_matrix(all_train_labels, all_train_preds)
             best_metrics['val_confusion_matrix'] = confusion_matrix(all_val_labels, all_val_preds)
-            
+
             save_checkpoint(
                 model, optimizer, epoch, best_metrics, config,
-                f'{config.model_name}_{config.seq_len}_best_train.pth'
+                f'{config.model_name}_{config.seq_len}_best_val.pth'
             )
 
         # Calculate epoch time
@@ -1078,11 +1094,26 @@ def prepare_data(X, y, config, val_split=0.2, compute_weights=True):
     batch_size = config.batch_size
     
     
-    # Split data
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=val_split, random_state=32, stratify=y
+    # Split data.
+    # Indices come from the frozen split registry rather than a fresh train_test_split,
+    # so the partition is a versioned artefact and cannot drift between runs. The first
+    # call reproduces the original inline split exactly.
+    # TS_SPLIT_TAG selects which frozen partition to use:
+    #   holdout20  - the original stratified random split (B0/B1)
+    #   grouped20  - no capture session spans train and val (B2)
+    #   control20  - grouped20's sizes and class priors, drawn randomly (B2 control)
+    train_idx, val_idx = splits.get_or_create_split(
+        y,
+        dataset_name=getattr(config, 'dataset_name', 'unknown'),
+        num_class=getattr(config, 'num_class', None),
+        val_split=val_split,
+        random_state=32,
+        tag=os.environ.get('TS_SPLIT_TAG', 'holdout20'),
     )
-    
+    X_train, X_val = X[train_idx], X[val_idx]
+    y_train, y_val = y[train_idx], y[val_idx]
+
+
     # Compute class weights if requested. Done before any --fast-dev-run truncation
     # below, so the weights still come from the full split and a truncated subset that
     # happens to miss a class cannot make compute_class_weight raise.
