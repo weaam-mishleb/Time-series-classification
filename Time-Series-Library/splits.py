@@ -27,6 +27,10 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 SPLITS_DIR = os.environ.get('TS_SPLITS_DIR',
                             os.path.join(os.path.dirname(_THIS_DIR), 'splits'))
 
+# Datasets that must never receive an on-the-fly split, because their rows are not
+# independent and a random partition would leak. See the raise in get_or_create_split.
+DATASETS_REQUIRING_PREBUILT_SPLIT = {'Cesnet'}
+
 
 def _label_fingerprint(y):
     """Hash of the label vector: detects that the underlying rows changed."""
@@ -83,6 +87,18 @@ def get_or_create_split(y, dataset_name, num_class=None, val_split=0.2,
             print(f"[splits] loaded {os.path.basename(path)} "
                   f"({len(train_idx)} train / {len(val_idx)} val)")
         return train_idx, val_idx
+
+    # Datasets whose rows are not independent: a random split would drop exact duplicates
+    # of training rows into validation. CESNET carries no flow identifier and ~12% of its
+    # rows are byte-identical to another row in at least one window size, so its split has
+    # to be built in advance (cesnet_build_split.py, tag 'dupgrouped'). Deriving one here
+    # would silently produce a leaking partition that still looks perfectly ordinary.
+    if dataset_name in DATASETS_REQUIRING_PREBUILT_SPLIT:
+        raise FileNotFoundError(
+            f"No split file at {path}. Dataset '{dataset_name}' must never get an "
+            f"on-the-fly random split: its rows contain exact duplicates, so a random "
+            f"partition leaks training rows into validation. Build the split first "
+            f"(tag '{tag}'), then re-run.")
 
     # Only the original stratified split may be derived on demand. grouped20/control20 are
     # built by grouped_split.py from capture provenance and cannot be reconstructed here;
