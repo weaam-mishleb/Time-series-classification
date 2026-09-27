@@ -9,6 +9,16 @@ import glob
 import json
 import time
 
+# Full "Mon DD, YYYY HH:MM:SS.ffffffffff" prefix of a tshark frame.time, without the
+# trailing timezone abbreviation, which pandas cannot parse and which we do not need
+# because every comparison is within a single capture file.
+FULL_TIME_RE = r'^([A-Za-z]{3} +\d{1,2}, \d{4} \d{2}:\d{2}:\d{2}\.\d+)'
+
+# The UTMobileNet captures were all recorded 16-21 March 2019. Any other year marks a
+# torn record rather than a real packet; see the note in process_UTMobileNet_traffic_dir.
+CAPTURE_YEAR = int(os.environ.get('TS_CAPTURE_YEAR', '2019'))
+
+
 def process_TextQuic_traffic(input_file, output_file, window_size):
     """
     Process QUIC traffic data and create an aggregated CSV file with custom window size statistics.
@@ -365,38 +375,150 @@ def process_UTMobileNet_traffic_dir(input_file, output_file, window_size):
             print(f"Skipping {input_file}: Missing columns {missing_columns}")
             return None
 
-        # Extract only the HH:MM:SS.ssssss part
-        df["frame.time_relative"] = df["frame.time"].str.extract(r'(\d{2}:\d{2}:\d{2}\.\d+)')
-        print(df['frame.time_relative'][:10])
+        # ------------------------------------------------------------------
+        # Timestamp parsing.
+        #
+        # The original code kept only HH:MM:SS.ffffff and discarded the date. That has
+        # two consequences, both measured over all 3,434 flows:
+        #
+        #   * A capture crossing midnight is torn apart. Packets after 00:00 get a
+        #     seconds-of-day near 0 while packets before it sit near 86,400, so the
+        #     sort inverts the flow and the span becomes ~24 h. Two flows are affected
+        #     (twitter_post-tweet_2019-03-20_23-59-58, which is really 9.03 s, and
+        #     google-maps_explore_2019-03-16_23-59-34, really 29.2 s).
+        #   * A torn final record is invisible. 55 flows end with a partially written
+        #     row whose timestamp lands in a wrong year (1969-2100; 'Dec 31, 1969
+        #     18:00:00' is epoch 0 in CST). Without the date those rows look like an
+        #     ordinary time and inflate the span by hours.
+        #
+        # Parsing the full date fixes the first and exposes the second. Rows are then
+        # rejected on date validity alone -- never on gap size. The largest legitimate
+        # gap in the dataset is 26.4 s (long uploads and video), while the smallest
+        # corrupt jump is 3.6e7 s, so a gap threshold would work but would be an
+        # arbitrary number that risks deleting real idle. Date validity does not.
+        # ------------------------------------------------------------------
+        n_raw = len(df)   # df is untouched between read_csv and here
+        _ts = df["frame.time"].astype(str).str.extract(FULL_TIME_RE, expand=False)
+        _dt = pd.to_datetime(_ts, format="%b %d, %Y %H:%M:%S.%f", errors='coerce')
 
-        # Convert to seconds
-        df["frame.time_relative"] = pd.to_datetime(df["frame.time_relative"], format="%H:%M:%S.%f").dt.time
-        print(df['frame.time_relative'][:10])
-        df["frame.time_relative"] = df["frame.time_relative"].apply(lambda t: (t.hour * 3600) + (t.minute * 60) + t.second + t.microsecond / 1e6)
-        print(df['frame.time_relative'][:10])
-        df = df.sort_values(by='frame.time_relative')  # Ensure time order
-        print(df['frame.time_relative'][:10])
-        
-        # Compute relative time
-        start_time = df['frame.time_relative'].iloc[0]
-        df['frame.time_relative'] = df['frame.time_relative'] - start_time
-        print(df['frame.time_relative'][:10])
-        
-        # **Break if there are negative values**
+        n_unparsed = int(_dt.isna().sum())
+        bad_year = _dt.notna() & (_dt.dt.year != CAPTURE_YEAR)
+        n_bad_year = int(bad_year.sum())
+        if n_unparsed or n_bad_year:
+            print(f"⚠️  {input_file}: dropping {n_unparsed} unparseable and {n_bad_year} "
+                  f"wrong-year timestamps {sorted(_dt[bad_year].dt.year.unique())[:5]}")
+
+        keep_ts = _dt.notna() & ~bad_year
+        df, _dt = df[keep_ts.to_numpy()], _dt[keep_ts]
+        if df.empty:
+            print(f"Skipping {input_file}: No valid rows after computing relative time.")
+            return None
+
+        # Sort on the full timestamp, then express seconds from the first packet. The
+        # difference is taken on datetime64, which is exact integer nanoseconds, so no
+        # float cancellation is introduced by the larger absolute magnitude.
+        _dt = _dt.sort_values(kind='mergesort')
+        df = df.loc[_dt.index]
+        df["frame.time_relative"] = (_dt - _dt.iloc[0]).dt.total_seconds().to_numpy()
+
+        # Sorting makes this non-negative by construction; assert rather than trust it.
         if (df['frame.time_relative'] < 0).any():
             print("❌ Error: Negative values detected in 'frame.time'. Stopping execution.")
             return None # Stop execution
 
-        # Drop rows where 'frame.time_relative' is NaN
-        df = df.dropna(subset=['frame.time_relative'])
-        if df.empty:
-            print(f"Skipping {input_file}: No valid rows after computing relative time.")
-            return None
-        
-        # Compute window index
-        df['window'] = (df['frame.time_relative'] // window_size).astype(int)
 
-        # Determine the range of windows
+        # ------------------------------------------------------------------
+        # Direction assignment + background-traffic filtering.
+        #
+        # The legacy rule was `client = df['ip.src'].iloc[0]` followed by
+        # `-1 if ip.src == client else 1`. Validation over all 3,434 flows /
+        # 18,318,174 packets showed it mis-identifies the client in 957 flows
+        # (27.9%), via two independent failure modes:
+        #   * 821 flows (23.91%) whose first packet has ip.src = NaN (IPv6 or
+        #     broadcast, which the CSV has no source column for). NaN == NaN is
+        #     False, so EVERY packet became downstream and upstream vanished.
+        #   * 135 flows (3.93%) whose first packet by time is INBOUND, so the
+        #     "client" was set to a server address and the direction inverted.
+        #     Concentrated in upload actions, where the server replies first.
+        #
+        # sll.pkttype is the Linux cooked-capture packet type and is a direct
+        # link-layer direction signal, independent of IP version:
+        #     4 = sent by us (the capturing device)  -> upstream
+        #     0 = unicast to us                      -> downstream
+        # It is present in 100% of files with zero NaN, and against ground truth
+        # scores 99.98% versus 96.97% for the legacy rule. The residual 0.02%
+        # was traced to LAN-neighbour traffic, where the "source is private"
+        # proxy is wrong and pkttype is right.
+        #
+        # Filtering (per approved policy): keep only pkttype in {0, 4} and drop
+        # loopback. This removes broadcast (1), multicast (2), other-host (3)
+        # and ~55 malformed pkttype values. IPv6 unicast carries pkttype 0/4 and
+        # is therefore KEPT and now correctly directed, where previously it was
+        # silently forced downstream.
+        # ------------------------------------------------------------------
+        # Two orthogonal switches:
+        #   TS_DIRECTION_MODE   pkttype (correct) | ipsrc (legacy, reproduces the bug)
+        #   TS_FILTER_BACKGROUND  0 = Option A (keep everything) | 1 = Option B (filter)
+        #
+        # Option A assigns pkttype 1/2/3 to downstream. That is directionally correct at
+        # the link layer: PACKET_OUTGOING (4) is set for anything WE transmit, including
+        # multicast we originate, so every non-4 frame was received by our interface. It
+        # is not semantically ideal -- broadcast and multicast are not server->client
+        # conversation traffic -- which is precisely what Option B tests. Their volume is
+        # recorded per flow (bg_pkttype / bg_loopback) so the contribution stays visible
+        # and ablatable instead of being silently folded into downstream.
+        n_before = len(df)
+        mode = os.environ.get('TS_DIRECTION_MODE', 'pkttype')
+        do_filter = os.environ.get('TS_FILTER_BACKGROUND', '1') == '1'
+
+        if mode == 'pkttype':
+            if 'sll.pkttype' not in df.columns:
+                print(f"Skipping {input_file}: sll.pkttype column missing")
+                return None
+
+            pk = pd.to_numeric(df['sll.pkttype'], errors='coerce')
+            is_std = pk.isin([0, 1, 2, 3, 4])
+            is_bg_pk = pk.isin([1, 2, 3])
+
+            src_s = df['ip.src'].astype(str)
+            dst_s = df['ip.dst'].astype(str) if 'ip.dst' in df.columns else pd.Series(
+                ['nan'] * len(df), index=df.index)
+            is_loop = src_s.str.startswith('127.') | dst_s.str.startswith('127.')
+
+            n_bg_pk = int(is_bg_pk.sum())
+            n_bg_loop = int(is_loop.sum())
+            n_malformed = int((~is_std).sum())
+            if n_malformed:
+                print(f"⚠️  {input_file}: {n_malformed} packets with malformed "
+                      f"sll.pkttype {sorted(pk[~is_std].dropna().unique())[:5]} — dropped")
+
+            if do_filter:
+                keep = pk.isin([0, 4]) & ~is_loop           # Option B
+                n_pk_dropped, n_loop_dropped = int((~pk.isin([0, 4])).sum()), \
+                    int((is_loop & pk.isin([0, 4])).sum())
+            else:
+                keep = is_std                                # Option A: drop only corrupt
+                n_pk_dropped, n_loop_dropped = n_malformed, 0
+
+            df = df[keep].copy()
+            if df.empty:
+                print(f"Skipping {input_file}: no packets left after filtering")
+                return None
+
+            df['direction'] = np.where(
+                pd.to_numeric(df['sll.pkttype'], errors='coerce') == 4, -1, 1)
+        elif mode == 'ipsrc':
+            # Legacy path, retained ONLY so the pre-fix dataset can be reproduced
+            # for comparison. Known to be wrong; never use for new results.
+            n_pk_dropped = n_loop_dropped = n_bg_pk = n_bg_loop = n_malformed = 0
+            client = df['ip.src'].iloc[0]
+            df['direction'] = df['ip.src'].apply(lambda x: -1 if x == client else 1)
+        else:
+            raise ValueError(f"TS_DIRECTION_MODE must be 'pkttype' or 'ipsrc', got {mode!r}")
+
+        # Recompute the window grid AFTER filtering, so a flow's span reflects
+        # real traffic rather than background chatter.
+        df['window'] = (df['frame.time_relative'] // window_size).astype(int)
         min_window = df['window'].min()
         max_window = df['window'].max()
 
@@ -406,13 +528,32 @@ def process_UTMobileNet_traffic_dir(input_file, output_file, window_size):
 
         print(f"Window range: {min_window} to {max_window}")
 
-        # Create a DataFrame to hold all possible windows
         all_windows = pd.DataFrame({'window': range(int(min_window), int(max_window) + 1)})
 
-        # Assign direction: -1 for client (source), 1 for server (destination)
-        print("unique src ", len(pd.unique(df['ip.src'])))
-        client = df['ip.src'].iloc[0]
-        df['direction'] = df['ip.src'].apply(lambda x: -1 if x == client else 1)
+        n_up = int((df['direction'] == -1).sum())
+        n_dn = int((df['direction'] == 1).sum())
+        if _FILTER_STATS is not None:
+            _FILTER_STATS.append({
+                'input_file': input_file, 'mode': mode,
+                'filtered': int(do_filter) if mode == 'pkttype' else 0,
+                # packets_raw counts the file as read; packets_before is after timestamp
+                # rejection, so the two differ by exactly the torn records.
+                'packets_raw': n_raw,
+                'dropped_unparsed_time': n_unparsed, 'dropped_bad_year': n_bad_year,
+                'packets_before': n_before, 'packets_after': len(df),
+                'dropped_pkttype': n_pk_dropped, 'dropped_loopback': n_loop_dropped,
+                # Audit: background volume PRESENT in the flow, whether or not it was
+                # removed. Under Option A these sit inside `downstream`.
+                'bg_pkttype': n_bg_pk, 'bg_loopback': n_bg_loop,
+                'malformed_pkttype': n_malformed,
+                'upstream': n_up, 'downstream': n_dn,
+                'duration_s': float(df['frame.time_relative'].max()),
+                'n_windows': int(max_window - min_window + 1),
+            })
+        # Loud failure on the exact condition that hid the original bug.
+        if mode == 'pkttype' and n_up == 0:
+            print(f"⚠️  {input_file}: ZERO upstream packets after correction "
+                  f"({len(df)} packets) — inspect before trusting this flow")
 
         # Separate client and server packets
         client_packets = df[df['direction'] == -1]
@@ -700,6 +841,19 @@ def create_direction_dataset(input_dirs, output_dir, window_size=5, balance_clas
         print(f"✅ Saved {len(all_features)} samples to {output_dir}")
     else:
         print("⚠️ No valid samples found, dataset not created.")
+
+# When a list is assigned here, process_UTMobileNet_traffic_dir appends one record per
+# processed flow describing what was filtered. The pipeline driver uses it to emit the
+# before/after report, so nothing is ever dropped silently.
+_FILTER_STATS = None
+
+
+def set_filter_stats_sink(sink):
+    """Install (or clear, with None) the per-flow filtering-statistics collector."""
+    global _FILTER_STATS
+    _FILTER_STATS = sink
+    return sink
+
 
 _UTMOBILE_CAPTURE_RE = re.compile(
     r'^timeseries_([^_]+)_(.+)_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_([0-9a-f]+)\.csv$')

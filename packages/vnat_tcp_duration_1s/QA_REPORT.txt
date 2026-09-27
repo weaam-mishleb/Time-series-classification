@@ -1,0 +1,35 @@
+=== coverage ===
+  [OK ] ledger rows   180 of 180
+  [OK ] unique run_ids   180 unique
+  [OK ] no duplicates
+  [OK ] all runs OK   180 OK, 0 not
+  [OK ] full cartesian coverage   180 of 180
+
+=== artefacts ===
+  [OK ] every checkpoint exists   0 missing
+  [OK ] every per-run CSV exists   0 missing
+  [OK ] flow probability arrays   180 of 180
+
+=== protocol invariants ===
+  [OK ] one split fingerprint
+  [OK ] fingerprint matches the split file
+  [OK ] all metrics from best_val
+  [OK ] n_classes always 4
+  [OK ] eval side always Validation
+  [OK ] weighted loss on every run
+  [OK ] deterministic flag on every run
+  [OK ] grad clip constant 1.0
+  [OK ] class weights identical across runs
+  [OK ] train counts identical across runs
+  [OK ] sum(w_c * train_count_c) == n_train   1693.9998 vs 1694
+  [OK ] train/val sizes constant   1694/727
+  [OK ] seq_len == T_BY_WINDOW everywhere   []
+  [OK ] epochs_run never NaN
+  [OK ] best_epoch <= epochs_run
+
+=== metric sanity ===
+  [OK ] flow_acc finite and within [0,100]
+  [OK ] flow_macro_f1 finite and within [0,100]
+  [OK ] all cells have 3 seeds   0 bad cells
+
+QA PASSED

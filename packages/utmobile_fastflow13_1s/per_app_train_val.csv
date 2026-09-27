@@ -1,0 +1,14 @@
+duration_s,app,train_flows,val_flows,train_captures,val_captures
+1,facebook,627,266,196,84
+1,gmail,219,99,102,44
+1,google-drive,390,169,197,85
+1,google-maps,1473,669,336,144
+1,hangout,252,103,78,34
+1,instagram,586,246,114,49
+1,messenger,226,100,104,45
+1,netflix,634,257,207,88
+1,pinterest,552,260,85,36
+1,reddit,308,138,199,85
+1,spotify,498,260,195,84
+1,twitter,369,157,233,100
+1,youtube,516,201,174,74

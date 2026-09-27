@@ -1,0 +1,14 @@
+duration_s,app,train_flows,val_flows,train_captures,val_captures,total_flows
+3,facebook,558,253,190,82,811
+3,gmail,195,77,102,44,272
+3,google-drive,259,114,175,75,373
+3,google-maps,1120,492,332,142,1612
+3,hangout,256,97,79,33,353
+3,instagram,354,145,113,48,499
+3,messenger,222,96,104,45,318
+3,netflix,498,205,202,87,703
+3,pinterest,546,246,83,36,792
+3,reddit,263,121,197,85,384
+3,spotify,375,227,195,84,602
+3,twitter,341,131,231,99,472
+3,youtube,349,134,151,64,483
