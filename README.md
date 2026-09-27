@@ -22,5 +22,4 @@ This is encrypted traffic classification research that represents network traffi
 ## Authors
 - Amit Dvir
 - Chen Hajaj
-- Shachar Ketz
-- Chanan Helman
+- Weaam Mishleb 
