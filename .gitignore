@@ -68,3 +68,14 @@ datasets/
 .DS_Store
 *.swp
 *.swo
+
+# Final package evidence (2026-09) ------------------------------------------
+# The packages themselves live under /data/weaamm/ and stay out of the repo:
+# parquet/npy/npz feature tensors, .pth checkpoints and multi-GB sweep logs are
+# all still ignored above. What is whitelisted here is only the small,
+# non-regenerable provenance and results record: PACKAGE_ID/FEATURE_MANIFEST,
+# the frozen splits, the run ledgers, QA reports and the published workbooks.
+!packages/**/*.csv
+!packages/**/*.json
+!packages/**/*.txt
+!packages/**/*.xlsx

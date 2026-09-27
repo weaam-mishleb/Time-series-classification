@@ -1,0 +1,144 @@
+{
+ "package": "utmobile_fastflow13_b2_ge50_1sec_capture70_weighted_det_6models_3seeds",
+ "big_window_seconds": 1,
+ "num_classes": 13,
+ "packet_rule": "packet_count >= 50 (INCLUSIVE) over the COMPLETE B2-filtered biflow; no class-count filter",
+ "classes": [
+  "facebook",
+  "gmail",
+  "google-drive",
+  "google-maps",
+  "hangout",
+  "instagram",
+  "messenger",
+  "netflix",
+  "pinterest",
+  "reddit",
+  "spotify",
+  "twitter",
+  "youtube"
+ ],
+ "split_protocol": "capture70",
+ "split_seed": 42,
+ "split_fingerprint": "dd22d7c9ff111be0",
+ "weighted": true,
+ "deterministic": true,
+ "aggregation": "mean_probability",
+ "eval_side": "Validation",
+ "population_label": "FastFlow-style population with our TSLib capture-split and capture-aggregation training protocol",
+ "population_note": "The POPULATION follows FastFlow. The TRAINING PROTOCOL is ours and is NOT claimed to be identical to FastFlow.",
+ "pairing_note": "This 1s population is NOT paired with the 3s/5s/8s populations. It is a different, larger eligible set with its own frozen split.",
+ "source_archive": "UTMobileNet2021.zip (all four partitions, raw CSVs)",
+ "source_archive_path": "/media/Data/Datasets/UTMobileNet2021/Raw/UTMobileNet2021.zip",
+ "source_pkl_used": false,
+ "source_pkl_note": "The 34,378-flow pickle was deliberately NOT used; this population was rebuilt from the raw CSV archive.",
+ "timestamp_representation": "int64 nanoseconds, exact, no floating point",
+ "boundary_rule": "slot = min(elapsed_ns // window_ns, T-1) in EXACT INTEGER NANOSECONDS; a packet exactly on a boundary enters the UPPER slot; a packet exactly at elapsed == D is included",
+ "duration_rule": "complete flow duration STRICTLY greater than 1 s",
+ "grad_clip": "none (matches the final UTMobile protocol)",
+ "population_gate": {
+  "total_flows": 12459,
+  "per_app": {
+   "facebook": 1019,
+   "gmail": 332,
+   "google-drive": 702,
+   "google-maps": 2560,
+   "hangout": 379,
+   "instagram": 1077,
+   "messenger": 374,
+   "netflix": 1984,
+   "pinterest": 925,
+   "reddit": 960,
+   "spotify": 803,
+   "twitter": 573,
+   "youtube": 771
+  },
+  "excluded_apps": [
+   "dropbox",
+   "hulu",
+   "pandora",
+   "skype"
+  ],
+  "total_packets": 20309025,
+  "note": "B2 packet filter applied BEFORE biflow construction; packet_count >= 50 inclusive over the COMPLETE filtered biflow"
+ },
+ "n_flows": 9575,
+ "n_captures": 3172,
+ "runs": 180,
+ "features": [
+  {
+   "index": 0,
+   "legacy_column_name": "total_size_dir_-1",
+   "true_meaning": "total payload of FORWARD packets in the slot (pkts_dir == 1, same source IP as the flow's first packet)"
+  },
+  {
+   "index": 1,
+   "legacy_column_name": "packet_count_dir_-1",
+   "true_meaning": "count of FORWARD packets in the slot (pkts_dir == 1)"
+  },
+  {
+   "index": 2,
+   "legacy_column_name": "avg_payload_dir_-1",
+   "true_meaning": "mean payload of FORWARD packets in the slot (pkts_dir == 1)"
+  },
+  {
+   "index": 3,
+   "legacy_column_name": "total_size_dir_1",
+   "true_meaning": "total payload of REVERSE packets in the slot (pkts_dir == 0)"
+  },
+  {
+   "index": 4,
+   "legacy_column_name": "packet_count_dir_1",
+   "true_meaning": "count of REVERSE packets in the slot (pkts_dir == 0)"
+  },
+  {
+   "index": 5,
+   "legacy_column_name": "avg_payload_dir_1",
+   "true_meaning": "mean payload of REVERSE packets in the slot (pkts_dir == 0)"
+  },
+  {
+   "index": 6,
+   "legacy_column_name": "upstream_downstream_ratio",
+   "true_meaning": "total_payload_forward / total_payload_reverse (index 0 / index 3), and 0 when the denominator is 0. It is a PAYLOAD-SIZE ratio, not a packet-count ratio."
+  },
+  {
+   "index": 7,
+   "legacy_column_name": "time_from_start",
+   "true_meaning": "slot_index * window_seconds; identical for every flow, so it carries no per-sample information"
+  }
+ ],
+ "feature_3feat_indices": [
+  1,
+  4,
+  6
+ ],
+ "feature_3feat_meaning": "forward packet count, reverse packet count, payload-size ratio",
+ "direction_convention": "Direction is FORWARD/REVERSE relative to the flow's FIRST packet. It is NOT client/server and NOT device/network. The legacy suffixes dir_-1 and dir_1 are inverted with respect to the pkts_dir value they hold; the values themselves are canonical and unchanged.",
+ "feature_naming_status": "legacy names retained unchanged for comparability",
+ "windows": [
+  "20ms",
+  "30ms",
+  "40ms",
+  "50ms",
+  "75ms"
+ ],
+ "window_exclusion_1s": {
+  "shipped_windows": [
+   "20ms",
+   "30ms",
+   "40ms",
+   "50ms",
+   "75ms"
+  ],
+  "excluded_windows": [
+   "100ms",
+   "150ms",
+   "200ms",
+   "250ms"
+  ],
+  "reason": "At a 1-second horizon these windows give sequence lengths T = 11, 7, 6 and 5. Autoformer's AutoCorrelation selects top_k = int(c*log(L)) lags and the index goes out of range for every one of them (RuntimeError: selected index k out of range). TimesNet additionally fails at T = 5 (250ms), where FFT period detection computes period = seq_len // top_list with a zero entry, producing period = 0 and an invalid reshape. Both are intrinsic architectural limits at short sequence lengths.",
+  "policy": "Only windows on which ALL SIX models run are shipped. No architecture, hyperparameter, feature array, population or split was changed; no sequence was padded to satisfy a model; no unsupported cell is run.",
+  "verified_by": "per-model forward-pass probe across all nine windows, both packages",
+  "grid": "6 models x 2 feature configs x 5 windows x 3 seeds = 180 unique runs"
+ }
+}

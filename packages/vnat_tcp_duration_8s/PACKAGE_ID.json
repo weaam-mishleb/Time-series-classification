@@ -1,0 +1,149 @@
+{
+ "package": "vnat_tcp_duration_8sec_weighted_det_6models_3seeds",
+ "PACKAGE_ID": "FINAL_TCP_ONLY_DURATION_FILTERED",
+ "status": "FINAL. Supersedes the earlier approved packages and the experimental no-duration / zero-pad packages.",
+ "dataset": "VNAT",
+ "big_window_seconds": 8,
+ "num_classes": 4,
+ "classes": [
+  "Chat",
+  "Control",
+  "File Transfer",
+  "Streaming"
+ ],
+ "runs": 324,
+ "models": [
+  "timesnet",
+  "informer",
+  "nst",
+  "autoformer",
+  "fedformer",
+  "timemixer"
+ ],
+ "feature_configs": [
+  "3feat",
+  "8feat"
+ ],
+ "windows": [
+  "20ms",
+  "30ms",
+  "40ms",
+  "50ms",
+  "75ms",
+  "100ms",
+  "150ms",
+  "200ms",
+  "250ms"
+ ],
+ "training_seeds": [
+  0,
+  1,
+  2
+ ],
+ "filter_order": [
+  "1. original VNAT H5 source",
+  "2. remove VoIP",
+  "3. keep the four classes",
+  "4. packet_count >= 10 over the COMPLETE flow",
+  "5. TCP only (ip_proto == 6)",
+  "6. duration >= 8 (inclusive; `>=` NOT changed to `>`)",
+  "7. packets from the first 8 seconds only (elapsed <= D, before slotting)"
+ ],
+ "short_flows": "NOT admitted; terminal zero-padding is NOT used",
+ "empty_slots": "empty slots inside a retained flow occur naturally and are all-zero",
+ "boundary": {
+  "rule": "duration >= 8, inclusive",
+  "flows_exactly_equal_to_D": 0,
+  "count_with_strict_gt": 1980,
+  "identical_sets": true,
+  "nearest_above_s": 8.015256881713867,
+  "nearest_below_s": 7.899909019470215
+ },
+ "VPN": {
+  "vpn_flows": 0,
+  "nonvpn_flows": 1980,
+  "statement": "Every VNAT VPN flow is OpenVPN over UDP, so TCP-only removes all 79 of them. This package contains NO VPN traffic. Do not claim that VPN and non-VPN are both represented."
+ },
+ "split_protocol": "random70_stratified_flowlevel_splitseed42",
+ "split_seed": 42,
+ "split_level": "flow",
+ "split_stratified_on": "traffic class only (never VPN status, never application identity)",
+ "split_fingerprint": "278befae3cd3e10e",
+ "split_derivation": "TCP-only subset of the ORIGINAL frozen per-duration split (fingerprint 68727548861bb3d8, 2080 flows); non-TCP flows dropped from the side they were already on; no retained flow changed side; the split was NOT regenerated from a seed",
+ "eval_side": "Validation",
+ "eval_level": "flow",
+ "aggregation": "none (flow-level metrics; no UTMobile capture aggregation)",
+ "weighted": true,
+ "class_weight_formula": "w_c = n_train / (4 * train_count_c), TRAIN LABELS ONLY",
+ "deterministic": true,
+ "grad_clip_max_norm": 1.0,
+ "grad_clip_rationale": "VNAT-specific. Pre-clip gradient norms exceed 1.0 on 92.5-100% of steps for 10 of 12 diagnostic cells; a paired ON/OFF pilot gave clipping the higher validation macro-F1 in 6 of 6 pairs (mean +2.10) and halved the seed spread at 250ms.",
+ "optimizer": "Adam",
+ "learning_rate": 0.0001,
+ "weight_decay": 0,
+ "max_epochs": 150,
+ "early_stopping": {
+  "metric": "validation macro-F1",
+  "mode": "max",
+  "min_delta": 0.001,
+  "patience": 8,
+  "restore_best_weights": true,
+  "gate": "counter starts only once the LR has reached min_lr"
+ },
+ "scheduler": {
+  "type": "ReduceLROnPlateau",
+  "metric": "validation loss",
+  "mode": "min",
+  "factor": 0.1,
+  "patience": 2,
+  "min_lr": 1e-07,
+  "delta": 0.001
+ },
+ "batch_size": {
+  "timesnet": 256,
+  "informer": 64,
+  "nst": 64,
+  "autoformer": 256,
+  "fedformer": 256,
+  "timemixer": 256
+ },
+ "standardization": "per-feature over axis (0,1), fitted on TRAIN rows only",
+ "metric_state": "best_val",
+ "population": {
+  "total_flows": 1980,
+  "per_class": {
+   "Chat": 505,
+   "Control": 579,
+   "File Transfer": 52,
+   "Streaming": 844
+  },
+  "n_train": 1382,
+  "n_validation": 598,
+  "train_per_class": {
+   "Chat": 349,
+   "Control": 407,
+   "File Transfer": 37,
+   "Streaming": 589
+  },
+  "validation_per_class": {
+   "Chat": 156,
+   "Control": 172,
+   "File Transfer": 15,
+   "Streaming": 255
+  },
+  "vpn": 0,
+  "nonvpn": 1980
+ },
+ "source_h5": "/data/natan/datasets/vnat/VNAT_Dataframe_release_1.h5",
+ "source_h5_sha256": "5d0c3d76cd292f19e25b5229719264bc1ddd71920a20bb27a7dec6c7138914de",
+ "self_contained": "no symlinks; no executable, import or runtime reference to any superseded package, pilot or report directory",
+ "supersedes": [
+  "the earlier approved weighted/deterministic VNAT packages (3s, 5s, 8s)",
+  "the experimental TCP-only no-duration zero-padded VNAT packages (3s, 5s, 8s)"
+ ],
+ "supersedes_note": "Directory names of superseded work are recorded ONLY in the deletion manifest under the reproduction directory, never here and never in code.",
+ "approved_split_fingerprint": "68727548861bb3d8",
+ "split_note": "The only change versus the previous approved VNAT protocol is TCP-only. The Train/Validation membership is therefore inherited from that protocol.",
+ "non_tcp_removed_from_train": 74,
+ "non_tcp_removed_from_validation": 26
+}

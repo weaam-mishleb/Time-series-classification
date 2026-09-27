@@ -1,0 +1,36 @@
+=== coverage ===
+  [OK ] ledger rows   180 of 180
+  [OK ] unique run_ids   180 unique
+  [OK ] no duplicates
+  [OK ] all runs OK   180 OK, 0 not
+  [OK ] every combination present   180 of 180
+
+=== artefacts ===
+  [OK ] every checkpoint present   0 missing
+  [OK ] every result CSV present   0 missing
+  [OK ] flow probability files   180 of 180
+
+=== protocol integrity ===
+  [OK ] one split fingerprint   ['dd22d7c9ff111be0']
+  [OK ] fingerprint matches the split file   dd22d7c9ff111be0
+  [OK ] all metrics from best_val
+  [OK ] n_classes always 13
+  [OK ] eval side labelled Validation
+  [OK ] class weights identical across runs
+  [OK ] sum(w_c * count_c) == n_train_flows   6650.0014 == 6650 (|err| 0.001357)
+  [OK ] train/val sizes constant   6650/2925
+  [OK ] seq_len matches T_BY_WINDOW
+  [OK ] epochs_run populated (never NaN)   0 NaN
+
+=== metric sanity (Validation) ===
+  [OK ] flow_acc finite and in [0,100]   min 40.38 max 86.70
+  [OK ] flow_macro_f1 finite and in [0,100]   min 34.01 max 85.88
+  [OK ] capture_acc finite and in [0,100]   min 54.20 max 97.90
+  [OK ] capture_macro_f1 finite and in [0,100]   min 44.30 max 97.72
+  [OK ] capture_vote_acc finite and in [0,100]   min 48.95 max 96.64
+  [OK ] capture_vote_macro_f1 finite and in [0,100]   min 42.02 max 96.35
+
+=== seed coverage ===
+  [OK ] all cells have 3 seeds   60 of 60 cells
+
+QA PASSED

@@ -1,0 +1,53 @@
+{
+ "n_features_8": 8,
+ "n_features_3": 3,
+ "feat_3_indices": [
+  1,
+  4,
+  6
+ ],
+ "features": [
+  {
+   "index": 0,
+   "legacy_column_name": "total_size_dir_-1",
+   "true_meaning": "total payload of FORWARD packets in the slot (pkts_dir == 1, same source IP as the flow's first packet)"
+  },
+  {
+   "index": 1,
+   "legacy_column_name": "packet_count_dir_-1",
+   "true_meaning": "count of FORWARD packets in the slot (pkts_dir == 1)"
+  },
+  {
+   "index": 2,
+   "legacy_column_name": "avg_payload_dir_-1",
+   "true_meaning": "mean payload of FORWARD packets in the slot (pkts_dir == 1)"
+  },
+  {
+   "index": 3,
+   "legacy_column_name": "total_size_dir_1",
+   "true_meaning": "total payload of REVERSE packets in the slot (pkts_dir == 0)"
+  },
+  {
+   "index": 4,
+   "legacy_column_name": "packet_count_dir_1",
+   "true_meaning": "count of REVERSE packets in the slot (pkts_dir == 0)"
+  },
+  {
+   "index": 5,
+   "legacy_column_name": "avg_payload_dir_1",
+   "true_meaning": "mean payload of REVERSE packets in the slot (pkts_dir == 0)"
+  },
+  {
+   "index": 6,
+   "legacy_column_name": "upstream_downstream_ratio",
+   "true_meaning": "total_payload_forward / total_payload_reverse (index 0 / index 3), and 0 when the denominator is 0. It is a PAYLOAD-SIZE ratio, not a packet-count ratio."
+  },
+  {
+   "index": 7,
+   "legacy_column_name": "time_from_start",
+   "true_meaning": "slot_index * window_seconds; identical for every flow, so it carries no per-sample information"
+  }
+ ],
+ "timestamp_representation": "int64 nanoseconds (exact)",
+ "boundary_rule": "slot = min(elapsed_ns // window_ns, T-1) in EXACT INTEGER NANOSECONDS; a packet exactly on a boundary enters the UPPER slot; a packet exactly at elapsed == D is included"
+}

@@ -1,0 +1,2 @@
+Model,Dataset,Train Accuracy,Train Precision,Train Recall,Train F1,Val Accuracy,Val Precision,Val Recall,Val F1,Training Time,Inference Time (ms)
+informer,dir_Cesnet_40ms,88.36%,87.38%,86.65%,86.98%,87.79%,85.98%,85.29%,85.61%,7:47:55,48701.43
